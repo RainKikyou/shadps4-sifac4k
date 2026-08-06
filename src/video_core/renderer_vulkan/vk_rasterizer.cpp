@@ -672,7 +672,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, Shader::Backend::Binding
                 vsharp.base_address, size, desc.is_written, desc.is_formatted, buffer_id);
             const u32 offset_aligned = Common::AlignDown(offset, alignment);
             const u32 adjust = offset - offset_aligned;
-            if (adjust % 4 != 0) {
+            if (adjust % 4 != 0 && !(vsharp.GetElementSize() == 2 && adjust % 2 == 0)) {
                 LOG_WARNING(Render_Vulkan, "Buffer binding {} in shader {:#x} isn't dword aligned",
                             i, stage.pgm_hash);
             }
