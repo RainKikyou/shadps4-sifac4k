@@ -369,6 +369,7 @@ GraphicsPipeline::GraphicsPipeline(
 
     const vk::GraphicsPipelineCreateInfo pipeline_info = {
         .pNext = &pipeline_rendering_ci,
+        .flags = vk::PipelineCreateFlagBits::eDisableOptimization,
         .stageCount = static_cast<u32>(shader_stages.size()),
         .pStages = shader_stages.data(),
         .pVertexInputState = !instance.IsVertexInputDynamicState() ? &vertex_input_info : nullptr,

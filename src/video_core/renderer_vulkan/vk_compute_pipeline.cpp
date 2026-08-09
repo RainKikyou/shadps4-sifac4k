@@ -103,6 +103,7 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
     SetObjectName(device, *pipeline_layout, "Compute PipelineLayout {}", debug_str);
 
     const vk::ComputePipelineCreateInfo compute_pipeline_ci = {
+        .flags = vk::PipelineCreateFlagBits::eDisableOptimization,
         .stage = shader_ci,
         .layout = *pipeline_layout,
     };
