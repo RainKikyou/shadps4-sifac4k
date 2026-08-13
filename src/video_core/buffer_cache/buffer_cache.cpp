@@ -128,7 +128,9 @@ void BufferCache::DownloadBufferMemory(Buffer& buffer, VAddr device_addr, u64 si
     download_buffer.Commit();
     scheduler.EndRendering();
     const auto cmdbuf = scheduler.CommandBuffer();
-    // Synchronize prior GPU writes to this buffer before the transfer read
+    // Synchronize prior GPU writes to this buffer (e.g. compute SSBO writes) before the transfer
+    // read. Without this barrier the copy can read stale L2 cache contents written before the
+    // dispatch, which surfaced as all-zero readbacks of the cascade AABB ring buffer.
     const vk::BufferMemoryBarrier2 pre_barrier = {
         .srcStageMask = vk::PipelineStageFlagBits2::eAllCommands,
         .srcAccessMask = vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite,
