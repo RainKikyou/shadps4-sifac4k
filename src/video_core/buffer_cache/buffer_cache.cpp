@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
-#include <magic_enum/magic_enum.hpp>
 #include "common/alignment.h"
 #include "common/debug.h"
 #include "common/scope_exit.h"
@@ -78,24 +77,12 @@ void BufferCache::InvalidateMemory(VAddr device_addr, u64 size) {
 void BufferCache::ReadMemory(VAddr device_addr, u64 size, bool is_write) {
     liverpool->SendCommand<true>([this, device_addr, size, is_write] {
         Buffer& buffer = slot_buffers[FindBuffer(device_addr, size)];
-        // GPU-modified ranges come as many small scattered islands, so the download
-        // is widened to a window around the request
-        constexpr u64 WindowSize = 512_KB;
-        const VAddr buf_start = buffer.CpuAddr();
-        const VAddr buf_end = buf_start + buffer.SizeBytes();
-        const VAddr window_start =
-            std::max<VAddr>(Common::AlignDown(device_addr, WindowSize), buf_start);
-        const VAddr window_end = std::min<VAddr>(
-            std::max<VAddr>(window_start + WindowSize, device_addr + size), buf_end);
-        DownloadBufferMemory<false>(buffer, window_start, window_end - window_start);
-        if (is_write) {
-            memory_tracker->MarkRegionAsCpuModified(device_addr, size);
-        }
+        DownloadBufferMemory<false>(buffer, device_addr, size, is_write);
     });
 }
 
 template <bool async>
-void BufferCache::DownloadBufferMemory(Buffer& buffer, VAddr device_addr, u64 size) {
+void BufferCache::DownloadBufferMemory(Buffer& buffer, VAddr device_addr, u64 size, bool is_write) {
     boost::container::small_vector<vk::BufferCopy, 1> copies;
     u64 total_size_bytes = 0;
     memory_tracker->ForEachDownloadRange<false>(
@@ -155,6 +142,9 @@ void BufferCache::DownloadBufferMemory(Buffer& buffer, VAddr device_addr, u64 si
                                     copy.size);
         }
         memory_tracker->UnmarkRegionAsGpuModified(device_addr, size);
+        if (is_write) {
+            memory_tracker->MarkRegionAsCpuModified(device_addr, size);
+        }
     };
     if constexpr (async) {
         scheduler.DeferOperation(write_data);
@@ -228,9 +218,12 @@ void BufferCache::BindVertexBuffers(
         const auto [buffer, offset] = ObtainBuffer(range.base_address, size, false);
         range.vk_buffer = buffer->buffer;
         range.offset = offset;
-        if (auto barrier = buffer->GetBarrier(vk::AccessFlagBits2::eVertexAttributeRead,
-                                              vk::PipelineStageFlagBits2::eVertexAttributeInput)) {
-            barriers.emplace_back(*barrier);
+        if (IsRegionGpuModified(range.base_address, size)) {
+            if (auto barrier =
+                    buffer->GetBarrier(vk::AccessFlagBits2::eVertexAttributeRead,
+                                       vk::PipelineStageFlagBits2::eVertexAttributeInput)) {
+                barriers.emplace_back(*barrier);
+            }
         }
     }
 
@@ -282,9 +275,11 @@ void BufferCache::BindIndexBuffer(
     // Bind index buffer.
     const u32 index_buffer_size = regs.num_indices * index_size;
     const auto [vk_buffer, offset] = ObtainBuffer(index_address, index_buffer_size, false);
-    if (auto barrier = vk_buffer->GetBarrier(vk::AccessFlagBits2::eIndexRead,
-                                             vk::PipelineStageFlagBits2::eIndexInput)) {
-        barriers.emplace_back(*barrier);
+    if (IsRegionGpuModified(index_address, index_buffer_size)) {
+        if (auto barrier = vk_buffer->GetBarrier(vk::AccessFlagBits2::eIndexRead,
+                                                 vk::PipelineStageFlagBits2::eIndexInput)) {
+            barriers.emplace_back(*barrier);
+        }
     }
     const auto cmdbuf = scheduler.CommandBuffer();
     cmdbuf.bindIndexBuffer(vk_buffer->Handle(), offset, index_type);
@@ -401,18 +396,10 @@ void BufferCache::CopyBuffer(VAddr dst, VAddr src, u32 num_bytes, bool dst_gds, 
     });
 }
 
-static std::pair<VAddr, u64> CachePageRange(VAddr addr, u64 size) {
-    const VAddr begin = Common::AlignDown(addr, BufferCache::CACHING_PAGESIZE);
-    const VAddr end = Common::AlignUp(addr + size, BufferCache::CACHING_PAGESIZE);
-    return {begin, end - begin};
-}
-
 std::pair<Buffer*, u32> BufferCache::ObtainBuffer(VAddr device_addr, u32 size, bool is_written,
                                                   bool is_texel_buffer, BufferId buffer_id) {
     // For read-only buffers use device local stream buffer to reduce renderpass breaks.
-    const auto [page_addr, page_size] = CachePageRange(device_addr, size);
-    if (!is_written && size <= CACHING_PAGESIZE && !IsRegionRegistered(device_addr, size) &&
-        !IsRegionGpuModified(page_addr, page_size)) {
+    if (!is_written && size <= CACHING_PAGESIZE && !IsRegionGpuModified(device_addr, size)) {
         const u64 offset = stream_buffer.Copy(device_addr, size, instance.UniformMinAlignment());
         return {&stream_buffer, offset};
     }
@@ -422,10 +409,7 @@ std::pair<Buffer*, u32> BufferCache::ObtainBuffer(VAddr device_addr, u32 size, b
     Buffer& buffer = slot_buffers[buffer_id];
     SynchronizeBuffer(buffer, device_addr, size, is_written, is_texel_buffer);
     if (is_written) {
-        gpu_modified_ranges.Add(page_addr, page_size);
-        const auto [buffer_page_addr, buffer_page_size] =
-            CachePageRange(buffer.CpuAddr(), buffer.SizeBytes());
-        gpu_modified_ranges.Add(buffer_page_addr, buffer_page_size);
+        gpu_modified_ranges.Add(device_addr, size);
     }
     return {&buffer, buffer.Offset(device_addr)};
 }
@@ -444,7 +428,7 @@ std::pair<Buffer*, u32> BufferCache::ObtainBufferForImage(VAddr gpu_addr, u32 si
         return ObtainBuffer(gpu_addr, size, false, false);
     }
     // In all other cases, just do a CPU copy to the staging buffer.
-    const auto [data, offset] = staging_buffer.Map(size, instance.StorageMinAlignment());
+    const auto [data, offset] = staging_buffer.Map(size, 16);
     memory->CopySparseMemory(gpu_addr, data, size);
     staging_buffer.Commit();
     return {&staging_buffer, offset};
@@ -460,8 +444,7 @@ bool BufferCache::IsRegionCpuModified(VAddr addr, size_t size) {
 }
 
 bool BufferCache::IsRegionGpuModified(VAddr addr, size_t size) {
-    return memory_tracker->IsRegionGpuModified(addr, size) ||
-           gpu_modified_ranges.Intersects(addr, size);
+    return memory_tracker->IsRegionGpuModified(addr, size);
 }
 
 BufferId BufferCache::FindBuffer(VAddr device_addr, u32 size) {
@@ -675,6 +658,16 @@ void BufferCache::ChangeRegister(BufferId buffer_id) {
 
 bool BufferCache::SynchronizeBuffer(Buffer& buffer, VAddr device_addr, u32 size, bool is_written,
                                     bool is_texel_buffer) {
+    // In batch mode, skip re-sync for read-only bindings already synced this batch.
+    // GPU-writable or texel buffers must sync every time (GPU may modify between draws).
+    if (!is_written && !is_texel_buffer && batch_depth > 0) {
+        const auto key = std::pair<VAddr, u32>{device_addr, size};
+        if (synced_bindings.contains(key)) {
+            return false;
+        }
+        synced_bindings.insert(key);
+    }
+
     boost::container::small_vector<vk::BufferCopy, 4> copies;
     size_t total_size_bytes = 0;
     VAddr buffer_start = buffer.CpuAddr();
@@ -763,15 +756,6 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
 }
 
 bool BufferCache::SynchronizeBufferFromImage(Buffer& buffer, VAddr device_addr, u32 size) {
-    if (auto type = texture_cache.IsMeta(device_addr)) {
-        if (*type == TextureCache::MetaType::HTile) {
-            static constexpr u32 ZmaskUncompressed = 0xf;
-            buffer.Fill(buffer.Offset(device_addr), size, ZmaskUncompressed);
-            return true;
-        } else {
-            LOG_WARNING(Render_Vulkan, "Unhandled metadata type {}", magic_enum::enum_name(*type));
-        }
-    }
     const ImageId image_id = texture_cache.FindImageFromRange(device_addr, size);
     if (!image_id) {
         return false;
@@ -823,6 +807,26 @@ void BufferCache::SynchronizeBuffersInRange(VAddr device_addr, u64 size) {
         u32 size = static_cast<u32>(end - start);
         SynchronizeBuffer(buffer, start, size, false, false);
     });
+}
+
+void BufferCache::EnterBatchMode(BatchType /*type*/) {
+    // Each command-batch entry (a single ProcessGraphics/ProcessCompute invocation) is its
+    // own batch: indirect buffers and cross-queue yields interleave separate dcb/acb tasks,
+    // between which the CPU may modify buffers. So every entry resets the DMA flag and clears
+    // the sync set. batch_depth only keeps IsInBatch() true across nested entries.
+    synced_bindings.clear();
+    ResetDmaSyncThisBatch();
+    ++batch_depth;
+    // LOG_INFO(Render_Vulkan, "EnterBatchMode: type={} depth={}", BatchTypeName(type), batch_depth);
+}
+
+void BufferCache::LeaveBatchMode(BatchType /*type*/) {
+    ASSERT(batch_depth > 0);
+    --batch_depth;
+    if (batch_depth == 0) {
+        synced_bindings.clear();
+    }
+    // LOG_INFO(Render_Vulkan, "LeaveBatchMode: type={} depth={}", BatchTypeName(type), batch_depth);
 }
 
 void BufferCache::WriteDataBuffer(Buffer& buffer, VAddr address, const void* value, u32 num_bytes) {
@@ -901,8 +905,7 @@ void BufferCache::RunGarbageCollector() {
         --max_deletions;
         Buffer& buffer = slot_buffers[buffer_id];
         // InvalidateMemory(buffer.CpuAddr(), buffer.SizeBytes());
-        DownloadBufferMemory<true>(buffer, buffer.CpuAddr(), buffer.SizeBytes());
-        memory_tracker->MarkRegionAsCpuModified(buffer.CpuAddr(), buffer.SizeBytes());
+        DownloadBufferMemory<true>(buffer, buffer.CpuAddr(), buffer.SizeBytes(), true);
         DeleteBuffer(buffer_id);
     };
 }
