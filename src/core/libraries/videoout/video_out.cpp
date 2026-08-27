@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <intrin.h>
 #include "common/assert.h"
 #include "common/config.h"
 #include "common/elf_info.h"
@@ -27,6 +28,11 @@ void PS4_SYSV_ABI sceVideoOutSetBufferAttribute(BufferAttribute* attribute, Pixe
              "pitchInPixel = {}",
              GetPixelFormatString(pixelFormat), tilingMode, aspectRatio, width, height,
              pitchInPixel);
+
+    // diagnostic: guest return address (stub is a jmp, [rsp] holds the guest return address)
+    const void* ra = _AddressOfReturnAddress();
+    u64 guest_ret = (ra != nullptr) ? *static_cast<const u64*>(ra) : 0;
+    LOG_INFO(Lib_VideoOut, "   GUEST_RET={:#x}", guest_ret);
 
     std::memset(attribute, 0, sizeof(BufferAttribute));
     attribute->pixel_format = static_cast<PixelFormat>(pixelFormat);
