@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2024 shadPS4 Emulator Project
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: Build and Release
+on: [push, pull_request]
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  BUILD_TYPE: Release
+jobs:
+  windows-sdl:
+    runs-on: windows-2025
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        submodules: recursive
+    - name: Configure CMake
+      run: cmake --fresh -G Ninja -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --parallel $env:NUMBER_OF_PROCESSORS
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: shadps4-sifac4k-win64
+        path: ${{github.workspace}}/build/shadPS4.exe
