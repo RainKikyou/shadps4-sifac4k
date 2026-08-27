@@ -690,38 +690,12 @@ void PatchGlobalDataShareAccess(IR::Block& block, IR::Inst& inst, Info& info,
     IR::IREmitter ir{block, IR::Block::InstructionList::s_iterator_to(inst)};
 
     // For data append/consume operations, convert to GDS buffer atomic.
+    // The offset is already resolved by SsaRewrite to a runtime value (GetM0() + inst_offset),
+    // so no compile-time userdata tracing is needed.
     if (inst.GetOpcode() == IR::Opcode::DataAppend || inst.GetOpcode() == IR::Opcode::DataConsume) {
-        // gds_offset = GetM0() + inst_offset, already resolved by SsaRewrite.
-        // Compute index dynamically per dispatch so that the same SPIR-V module works
-        // across all GDS base addresses (fixes cross-slot reuse bug).
-        const IR::Value& gds_offset = inst.Arg(0);
-        IR::U32 index;
-        if (gds_offset.IsImmediate()) {
-            // Fully static offset: fold at compile time.
-            index = ir.Imm32((gds_offset.U32() & 0xFFFF) >> 2);
-        } else {
-            // Find the user data register that feeds M0, then emit a runtime chain:
-            //   index = ((GetUserData(reg) >> 16) + inst_offset) >> 2
-            const auto pred = [](const IR::Inst* i) -> std::optional<const IR::Inst*> {
-                return i->GetOpcode() == IR::Opcode::GetUserData ? std::optional{i} : std::nullopt;
-            };
-            const auto result = IR::BreadthFirstSearch(&inst, pred);
-            ASSERT_MSG(result, "Unable to track M0 source for GDS");
-
-            const IR::ScalarReg ud_reg = result.value()->Arg(0).ScalarReg();
-            const IR::Inst* add = gds_offset.InstRecursive();
-            const u32 inst_offset = add->Arg(1).U32();
-
-            // Observed: GDS base lives in upper 16 bits of the user data register.
-            IR::U32 ud_val = ir.GetUserData(ud_reg);
-            IR::U32 gds_base = ir.ShiftRightLogical(ud_val, ir.Imm32(16));
-            IR::U32 gds_byte = ir.IAdd(gds_base, ir.Imm32(inst_offset));
-            IR::U32 clamped = ir.BitwiseAnd(gds_byte, ir.Imm32(0xFFFF));
-            index = ir.ShiftRightLogical(clamped, ir.Imm32(2));
-        }
-
         // Patch instruction to GDS buffer atomic increment/decrement.
         const IR::U32 handle = ir.Imm32(binding);
+        const IR::U32 index = ir.ShiftRightLogical(IR::U32{inst.Arg(0)}, ir.Imm32(2));
         const bool is_append = inst.GetOpcode() == IR::Opcode::DataAppend;
         const IR::Value prev = is_append ? ir.BufferAtomicInc(handle, index, {})
                                          : ir.BufferAtomicDec(handle, index, {});
