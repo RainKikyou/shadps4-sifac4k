@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <ranges>
 #include "common/assert.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
@@ -223,12 +224,14 @@ Image::Barriers Image::GetBarriers(vk::ImageLayout dst_layout, vk::AccessFlags2 
         const auto mips =
             needs_partial_transition
                 ? std::ranges::views::iota(subres_range->base.level,
-                                           subres_range->base.level + subres_range->extent.levels)
+                                           std::min(subres_range->base.level + subres_range->extent.levels,
+                                                    info.resources.levels))
                 : std::views::iota(0u, info.resources.levels);
         const auto layers =
             needs_partial_transition
                 ? std::ranges::views::iota(subres_range->base.layer,
-                                           subres_range->base.layer + subres_range->extent.layers)
+                                           std::min(subres_range->base.layer + subres_range->extent.layers,
+                                                    info.resources.layers))
                 : std::views::iota(0u, info.resources.layers);
 
         for (u32 mip : mips) {
