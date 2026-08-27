@@ -1086,21 +1086,8 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
-        // Force 4K viewport for CUSA24620 (SIFAC)
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: viewport BEFORE override - x={:.1f} y={:.1f} w={:.1f} h={:.1f}",
-                     viewport.x, viewport.y, viewport.width, viewport.height);
-
-            constexpr float TARGET_WIDTH = 3840.0f;
-            constexpr float TARGET_HEIGHT = 2160.0f;
-
-            // Force override all viewports for SIFAC (no range check)
-            viewport.x = 0.0f;
-            viewport.y = 0.0f;
-            viewport.width = TARGET_WIDTH;
-            viewport.height = TARGET_HEIGHT;
-
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: viewport AFTER override - x={:.1f} y={:.1f} w={:.1f} h={:.1f}",
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: viewport native - x={:.1f} y={:.1f} w={:.1f} h={:.1f}",
                      viewport.x, viewport.y, viewport.width, viewport.height);
         }
 
@@ -1120,21 +1107,8 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
-        // Force 4K scissor for CUSA24620 (SIFAC)
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: scissor BEFORE override - x={} y={} w={} h={}",
-                     vp_scsr.top_left_x, vp_scsr.top_left_y, vp_scsr.GetWidth(), vp_scsr.GetHeight());
-
-            constexpr s16 TARGET_WIDTH_4K = 3840;
-            constexpr s16 TARGET_HEIGHT_4K = 2160;
-
-            // Force override all scissors for SIFAC (no range check)
-            vp_scsr.top_left_x = 0;
-            vp_scsr.top_left_y = 0;
-            vp_scsr.bottom_right_x = TARGET_WIDTH_4K;
-            vp_scsr.bottom_right_y = TARGET_HEIGHT_4K;
-
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: scissor AFTER override - x={} y={} w={} h={}",
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: scissor native - x={} y={} w={} h={}",
                      vp_scsr.top_left_x, vp_scsr.top_left_y, vp_scsr.GetWidth(), vp_scsr.GetHeight());
         }
 
