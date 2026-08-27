@@ -395,6 +395,10 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     // Bind resource buffers and textures.
     Shader::Backend::Bindings binding{};
     push_data = MakeUserData(liverpool->regs);
+    if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+        LOG_INFO(Render_Vulkan, "SIFAC 4K: pushdata xscale={:.1f} yscale={:.1f} xoffset={:.1f} yoffset={:.1f}",
+                 push_data.xscale, push_data.yscale, push_data.xoffset, push_data.yoffset);
+    }
     for (const auto* stage : pipeline->GetStages()) {
         if (!stage) {
             continue;
