@@ -1,8 +1,9 @@
-// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
+﻿// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "common/config.h"
 #include "common/debug.h"
+#include "common/memory_patcher.h"
 #include "core/memory.h"
 #include "shader_recompiler/runtime_info.h"
 #include "video_core/amdgpu/liverpool.h"
@@ -1083,6 +1084,21 @@ void Rasterizer::UpdateViewportScissorState() const {
             viewport.height = yscale * 2.0f;
         }
 
+
+        // Force 4K viewport for CUSA24620 (SIFAC)
+        if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+            constexpr float TARGET_WIDTH = 3840.0f;
+            constexpr float TARGET_HEIGHT = 2160.0f;
+            // Only override if the viewport looks like 1080p (xscale ~960, yscale ~540)
+            if (viewport.width >= 1900.0f && viewport.width <= 1940.0f &&
+                viewport.height >= 1060.0f && viewport.height <= 1100.0f) {
+                viewport.x = 0.0f;
+                viewport.y = 0.0f;
+                viewport.width = TARGET_WIDTH;
+                viewport.height = TARGET_HEIGHT;
+            }
+        }
+
         viewports.push_back(viewport);
 
         auto vp_scsr = scsr;
@@ -1096,6 +1112,22 @@ void Rasterizer::UpdateViewportScissorState() const {
             vp_scsr.bottom_right_y = std::min(AmdGpu::Scissor::Clamp(vp_scsr.bottom_right_y),
                                               regs.viewport_scissors[i].bottom_right_y);
         }
+
+
+        // Force 4K scissor for CUSA24620 (SIFAC)
+        if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+            constexpr s16 TARGET_WIDTH_4K = 3840;
+            constexpr s16 TARGET_HEIGHT_4K = 2160;
+            // Only override if scissor looks like 1080p
+            if (vp_scsr.GetWidth() >= 1900 && vp_scsr.GetWidth() <= 1940 &&
+                vp_scsr.GetHeight() >= 1060 && vp_scsr.GetHeight() <= 1100) {
+                vp_scsr.top_left_x = 0;
+                vp_scsr.top_left_y = 0;
+                vp_scsr.bottom_right_x = TARGET_WIDTH_4K;
+                vp_scsr.bottom_right_y = TARGET_HEIGHT_4K;
+            }
+        }
+
         scissors.push_back({
             .offset = {vp_scsr.top_left_x, vp_scsr.top_left_y},
             .extent = {vp_scsr.GetWidth(), vp_scsr.GetHeight()},
