@@ -4,6 +4,7 @@
 #pragma once
 
 #include <boost/container/small_vector.hpp>
+#include <tsl/robin_map.h>
 #include "common/lru_cache.h"
 #include "common/slot_vector.h"
 #include "common/types.h"
@@ -146,6 +147,9 @@ public:
     /// Processes the fault buffer.
     void ProcessFaultBuffer();
 
+    /// Processes ready preemptive downloads not consumed by the guest.
+    void ProcessPreemptiveDownloads();
+
     /// Synchronizes all buffers in the specified range.
     void SynchronizeBuffersInRange(VAddr device_addr, u64 size);
 
@@ -170,7 +174,7 @@ private:
     }
 
     template <bool async>
-    void DownloadBufferMemory(Buffer& buffer, VAddr device_addr, u64 size);
+    void DownloadBufferMemory(Buffer& buffer, VAddr device_addr, u64 size, bool is_write);
 
     [[nodiscard]] OverlapResult ResolveOverlaps(VAddr device_addr, u32 wanted_size);
 
@@ -219,6 +223,17 @@ private:
     u64 gc_tick = 0;
     Common::LeastRecentlyUsedCache<BufferId, u64> lru_cache;
     RangeSet gpu_modified_ranges;
+    struct PreemptiveDownload {
+        VAddr device_addr;
+        u64 size;
+        u8* staging;
+        u64 done_tick;
+
+        auto operator<=>(const PreemptiveDownload&) const = default;
+    };
+    SplitRangeMap<PreemptiveDownload> preemptive_downloads;
+    using BufferCopies = boost::container::small_vector<vk::BufferCopy, 8>;
+    tsl::robin_map<BufferId, BufferCopies> preemptive_copies;
     SplitRangeMap<BufferId> buffer_ranges;
     PageTable page_table;
 };
