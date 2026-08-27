@@ -268,7 +268,7 @@ uint32_t ComputePipeFromCoord(uint32_t x, uint32_t y, uint32_t slice) {
 
     uint32_t pipe_swizzle = 0;
 #if ARRAY_MODE == ARRAY_3D_TILED_THIN1 || ARRAY_MODE == ARRAY_3D_TILED_THICK || ARRAY_MODE == ARRAY_3D_TILED_XTHICK
-    pipe_swizzle += max(1, NUM_PIPES / 2 - 1) * (slice / MICRO_TILE_THICKNESS);
+    pipe_swizzle += max(1u, uint(NUM_PIPES / 2 - 1)) * (slice / uint(MICRO_TILE_THICKNESS));
 #endif
     pipe_swizzle &= (NUM_PIPES - 1);
     pipe = pipe ^ pipe_swizzle;
@@ -316,11 +316,10 @@ uint32_t ComputeBankFromCoord(uint32_t x, uint32_t y, uint32_t slice, uint32_t t
 #if ARRAY_MODE == ARRAY_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_2D_TILED_THICK || ARRAY_MODE == ARRAY_2D_TILED_XTHICK
     slice_rotation = ((NUM_BANKS / 2) - 1) * (slice / MICRO_TILE_THICKNESS);
 #elif ARRAY_MODE == ARRAY_3D_TILED_THIN1 || ARRAY_MODE == ARRAY_3D_TILED_THICK || ARRAY_MODE == ARRAY_3D_TILED_XTHICK
-    slice_rotation = max(1u, (NUM_PIPES / 2) - 1) * (slice / MICRO_TILE_THICKNESS) / NUM_PIPES;
+    slice_rotation = max(1u, uint(NUM_PIPES / 2 - 1)) * (slice / uint(MICRO_TILE_THICKNESS)) / NUM_PIPES;
 #endif
 
-#if ARRAY_MODE == ARRAY_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_3D_TILED_THIN1 || \
-    ARRAY_MODE == ARRAY_PRT_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_3D_TILED_THIN1
+#if ARRAY_MODE == ARRAY_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_3D_TILED_THIN1 ||     ARRAY_MODE == ARRAY_PRT_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_3D_TILED_THIN1
                                                                 tile_split_rotation = ((NUM_BANKS / 2) + 1) * tile_split_slice;
 #endif
 
@@ -382,9 +381,7 @@ uint32_t ComputeSurfaceAddrFromCoordMacroTiled(uint32_t x, uint32_t y, uint32_t 
 
     uint32_t total_offset = slice_offset + macro_tile_offset + element_offset + tile_offset;
 
-#if ARRAY_MODE == ARRAY_PRT_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_TILED_THICK || \
-    ARRAY_MODE == ARRAY_PRT_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_2D_TILED_THICK || \
-    ARRAY_MODE == ARRAY_PRT_3D_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_3D_TILED_THICK
+#if ARRAY_MODE == ARRAY_PRT_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_TILED_THICK ||     ARRAY_MODE == ARRAY_PRT_2D_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_2D_TILED_THICK ||     ARRAY_MODE == ARRAY_PRT_3D_TILED_THIN1 || ARRAY_MODE == ARRAY_PRT_3D_TILED_THICK
     x %= macro_tile_pitch;
     y %= macro_tile_height;
 #endif
