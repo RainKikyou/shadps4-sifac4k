@@ -1,0 +1,93 @@
+﻿{
+    "Audio":  {
+                  "audio_backend":  0,
+                  "openal_hrtf":  0,
+                  "openal_main_output_device":  "Default Device",
+                  "openal_mic_device":  "Default Device",
+                  "openal_output_mode":  0,
+                  "openal_padSpk_output_device":  "Default Device",
+                  "sdl_main_output_device":  "預設裝置",
+                  "sdl_mic_device":  "無",
+                  "sdl_padSpk_output_device":  "預設裝置"
+              },
+    "Debug":  {
+                  "debug_dump":  false,
+                  "shader_collect":  false
+              },
+    "GPU":  {
+                "copy_gpu_buffers":  false,
+                "direct_memory_access_enabled":  false,
+                "dump_shaders":  false,
+                "fsr_enabled":  true,
+                "full_screen":  false,
+                "full_screen_mode":  "Windowed",
+                "hdr_allowed":  false,
+                "null_gpu":  false,
+                "patch_shaders":  false,
+                "present_mode":  "Mailbox",
+                "rcas_attenuation":  250,
+                "rcas_enabled":  true,
+                "readback_linear_images_enabled":  true,
+                "readbacks_mode":  0,
+                "vblank_frequency":  60,
+                "window_height":  720,
+                "window_width":  1280
+            },
+    "General":  {
+                    "connected_to_network":  false,
+                    "console_language":  10,
+                    "dev_kit_mode":  false,
+                    "enable_upnp":  true,
+                    "extra_dmem_in_mbytes":  0,
+                    "neo_mode":  false,
+                    "shad_net_enabled":  false,
+                    "shadnet_server":  "",
+                    "shadnet_webapi_server":  "http://srv.shadps4.net:31315",
+                    "show_splash":  false,
+                    "signaling_info":  "",
+                    "trophy_notification_duration":  6.0,
+                    "trophy_notification_side":  "right",
+                    "trophy_popup_disabled":  false,
+                    "volume_slider":  100
+                },
+    "Input":  {
+                  "background_controller_input":  false,
+                  "camera_id":  -1,
+                  "cursor_hide_timeout":  5,
+                  "cursor_state":  1,
+                  "ime_accessibility_enabled":  false,
+                  "ime_url_mail_short_panel":  false,
+                  "is_circle_enter":  false,
+                  "motion_controls_enabled":  true,
+                  "usb_device_backend":  0,
+                  "use_mice_as_mice":  false
+              },
+    "Log":  {
+                "append":  false,
+                "enable":  true,
+                "filter":  "",
+                "flush_level":  "",
+                "max_skip_duration":  5000,
+                "separate":  false,
+                "size_limit":  104857600,
+                "skip_duplicate":  true,
+                "sync":  true,
+                "type":  "wincolor"
+            },
+    "Vulkan":  {
+                   "gpu_id":  -1,
+                   "pipeline_cache_archived":  false,
+                   "pipeline_cache_enabled":  false,
+                   "renderdoc_enabled":  false,
+                   "vkcrash_diagnostic_enabled":  false,
+                   "vkguest_markers":  false,
+                   "vkhost_markers":  false,
+                   "vkvalidation_core_enabled":  false,
+                   "vkvalidation_enabled":  false,
+                   "vkvalidation_gpu_enabled":  false,
+                   "vkvalidation_sync_enabled":  false
+               },
+    "WindowsGuestRedZoneProtection":  {
+                                          "windows_guest_red_zone_protection_mode":  "Disabled"
+                                      }
+}

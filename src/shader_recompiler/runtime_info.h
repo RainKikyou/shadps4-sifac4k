@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
+﻿// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
@@ -45,7 +45,7 @@ constexpr Stage StageFromIndex(size_t index) noexcept {
 struct CommonHsEsVsRuntimeInfo {
     u32 hs_output_cp_stride;
 
-    bool operator<=>(const CommonHsEsVsRuntimeInfo&) const noexcept = default;
+    auto operator<=>(const CommonHsEsVsRuntimeInfo&) const noexcept = default;
 };
 
 struct CommonEsVsRuntimeInfo : protected CommonHsEsVsRuntimeInfo {
@@ -53,7 +53,7 @@ struct CommonEsVsRuntimeInfo : protected CommonHsEsVsRuntimeInfo {
     AmdGpu::TessellationTopology tess_topology;
     AmdGpu::TessellationPartitioning tess_partitioning;
 
-    bool operator<=>(const CommonEsVsRuntimeInfo&) const noexcept = default;
+    auto operator<=>(const CommonEsVsRuntimeInfo&) const noexcept = default;
 };
 
 struct LocalRuntimeInfo {
@@ -65,7 +65,7 @@ struct LocalRuntimeInfo {
 struct ExportRuntimeInfo : protected CommonEsVsRuntimeInfo {
     u32 vertex_data_size;
 
-    bool operator<=>(const ExportRuntimeInfo&) const noexcept = default;
+    auto operator<=>(const ExportRuntimeInfo&) const noexcept = default;
 };
 
 enum class Output : u8 {
@@ -106,7 +106,7 @@ struct VertexRuntimeInfo : protected CommonEsVsRuntimeInfo {
     /// UCP_ENA bits from PA_CL_CLIP_CNTL, lowered to clip distances in the shader.
     u32 user_clip_plane_mask{};
 
-    bool operator<=>(const VertexRuntimeInfo& other) const noexcept = default;
+    auto operator<=>(const VertexRuntimeInfo& other) const noexcept = default;
 };
 
 struct HullRuntimeInfo : protected CommonHsEsVsRuntimeInfo {
