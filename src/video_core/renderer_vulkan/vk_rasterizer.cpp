@@ -396,6 +396,13 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     Shader::Backend::Bindings binding{};
     push_data = MakeUserData(liverpool->regs);
     if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+        // Scale UI pushdata from 960x540 to 1920x1080 to match 1080p RT
+        if (push_data.xscale == 960.0f && (push_data.yscale == 540.0f || push_data.yscale == -540.0f)) {
+            push_data.xscale = 1920.0f;
+            push_data.yscale = (push_data.yscale < 0.0f ? -1080.0f : 1080.0f);
+            push_data.xoffset = 1920.0f;
+            push_data.yoffset = (push_data.yoffset < 0.0f ? -1080.0f : 1080.0f);
+        }
         LOG_INFO(Render_Vulkan, "SIFAC 4K: pushdata xscale={:.1f} yscale={:.1f} xoffset={:.1f} yoffset={:.1f}",
                  push_data.xscale, push_data.yscale, push_data.xoffset, push_data.yoffset);
     }
@@ -1093,6 +1100,13 @@ void Rasterizer::UpdateViewportScissorState() const {
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
             LOG_INFO(Render_Vulkan, "SIFAC 4K: viewport native - x={:.1f} y={:.1f} w={:.1f} h={:.1f}",
                      viewport.x, viewport.y, viewport.width, viewport.height);
+            // Upscale 1920x1080 viewport to 3840x2160 for 4K output
+            if (viewport.width == 1920.0f && (viewport.height == 1080.0f || viewport.height == -1080.0f)) {
+                viewport.x = 0.0f;
+                viewport.y = 0.0f;
+                viewport.width = 3840.0f;
+                viewport.height = 2160.0f;
+            }
         }
 
         viewports.push_back(viewport);
@@ -1114,6 +1128,13 @@ void Rasterizer::UpdateViewportScissorState() const {
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
             LOG_INFO(Render_Vulkan, "SIFAC 4K: scissor native - x={} y={} w={} h={}",
                      vp_scsr.top_left_x, vp_scsr.top_left_y, vp_scsr.GetWidth(), vp_scsr.GetHeight());
+            // Upscale 1920x1080 scissor to 3840x2160
+            if (vp_scsr.GetWidth() == 1920 && vp_scsr.GetHeight() == 1080) {
+                vp_scsr.top_left_x = 0;
+                vp_scsr.top_left_y = 0;
+                vp_scsr.bottom_right_x = 3840;
+                vp_scsr.bottom_right_y = 2160;
+            }
         }
 
         scissors.push_back({
