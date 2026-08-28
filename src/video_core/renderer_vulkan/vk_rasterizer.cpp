@@ -126,12 +126,11 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
             continue;
         }
         auto hint = liverpool->last_cb_extent[cb];
-        // SIFAC 4K: Force only flip buffer (1920x1080) to 3840x2160
-        // Leave scene RT (3360x3360), UI RT (960x540), and small RTs untouched
-        // to avoid viewport/scissor mismatch crashes
+        // SIFAC 4K: Force flip buffer and UI RT to 3840x2160
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
-            if (hint.width == 1920 && hint.height == 1080) {
-                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing flip buffer {}x{} -> 3840x2160", hint.width, hint.height);
+            if ((hint.width == 1920 && hint.height == 1080) ||
+                (hint.width == 960 && hint.height == 540)) {
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing RT {}x{} -> 3840x2160", hint.width, hint.height);
                 hint.width = 3840;
                 hint.height = 2160;
             }
@@ -414,6 +413,16 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     // Bind resource buffers and textures.
     Shader::Backend::Bindings binding{};
     push_data = MakeUserData(liverpool->regs);
+    // SIFAC 4K: Scale UI pushdata (480x270 -> 1920x1080) to match forced 3840x2160 RT
+    if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+        if (push_data.xscale == 480.0f && (push_data.yscale == 270.0f || push_data.yscale == -270.0f)) {
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling UI pushdata 960x540 -> 3840x2160");
+            push_data.xscale = 1920.0f;
+            push_data.yscale = (push_data.yscale < 0.0f ? -1080.0f : 1080.0f);
+            push_data.xoffset = 1920.0f;
+            push_data.yoffset = (push_data.yoffset < 0.0f ? -1080.0f : 1080.0f);
+        }
+    }
     for (const auto* stage : pipeline->GetStages()) {
         if (!stage) {
             continue;
@@ -1105,6 +1114,18 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
+        // SIFAC 4K: Scale UI viewport (960x540 -> 3840x2160) to match forced RT
+        bool sifac_ui_scaled = false;
+        if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+            if (viewport.width == 960.0f && (viewport.height == 540.0f || viewport.height == -540.0f)) {
+                sifac_ui_scaled = true;
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling UI viewport {}x{} -> 3840x2160", viewport.width, viewport.height);
+                viewport.x = 0.0f;
+                viewport.y = (viewport.height < 0.0f ? -2160.0f : 2160.0f);
+                viewport.width = 3840.0f;
+                viewport.height = (viewport.height < 0.0f ? -2160.0f : 2160.0f);
+            }
+        }
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
             LOG_INFO(Render_Vulkan, "SIFAC 4K: viewport native - x={:.1f} y={:.1f} w={:.1f} h={:.1f}",
                      viewport.x, viewport.y, viewport.width, viewport.height);
@@ -1126,6 +1147,12 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
+        if (sifac_ui_scaled) {
+            vp_scsr.top_left_x = 0;
+            vp_scsr.top_left_y = 0;
+            vp_scsr.bottom_right_x = 3840;
+            vp_scsr.bottom_right_y = 2160;
+        }
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
             LOG_INFO(Render_Vulkan, "SIFAC 4K: scissor native - x={} y={} w={} h={}",
                      vp_scsr.top_left_x, vp_scsr.top_left_y, vp_scsr.GetWidth(), vp_scsr.GetHeight());
