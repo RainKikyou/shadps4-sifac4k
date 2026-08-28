@@ -1105,13 +1105,15 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
-        // SIFAC 4K: Scale flip buffer viewport (1920x1080) to 3840x2160
+        // SIFAC 4K: Scale flip buffer scissor (1920x1080) to 3840x2160
+        // Use scissor for detection because viewport is 16384x16384 (clip-disabled mode)
         bool sifac_flip_scaled = false;
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
-            if (viewport.width == 1920.0f && (viewport.height == 1080.0f || viewport.height == -1080.0f)) {
+            if (scsr.GetWidth() == 1920 && scsr.GetHeight() == 1080) {
                 sifac_flip_scaled = true;
+                // Scale viewport to match 3840x2160
                 float sign_h = viewport.height < 0.0f ? -1.0f : 1.0f;
-                LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling flip buffer viewport {}x{} -> 3840x2160", viewport.width, viewport.height);
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling flip buffer scissor 1920x1080 -> 3840x2160 (vp={:.0f}x{:.0f})", viewport.width, viewport.height);
                 viewport.x = 0.0f;
                 viewport.y = sign_h * 2160.0f;
                 viewport.width = 3840.0f;
