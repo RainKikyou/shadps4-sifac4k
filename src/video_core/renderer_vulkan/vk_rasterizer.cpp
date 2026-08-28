@@ -397,17 +397,11 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     push_data = MakeUserData(liverpool->regs);
     if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
         if (push_data.xscale == 960.0f && (push_data.yscale == 540.0f || push_data.yscale == -540.0f)) {
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: UI pushdata 960x540 -> 1920x1080");
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: UI pushdata upscaled to 4K");
             push_data.xscale = 1920.0f;
             push_data.yscale = (push_data.yscale < 0.0f ? -1080.0f : 1080.0f);
             push_data.xoffset = 1920.0f;
             push_data.yoffset = (push_data.yoffset < 0.0f ? -1080.0f : 1080.0f);
-        } else if (push_data.xscale == 1920.0f && (push_data.yscale == 1080.0f || push_data.yscale == -1080.0f)) {
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: UI pushdata 1920x1080 -> 3840x2160");
-            push_data.xscale = 3840.0f;
-            push_data.yscale = (push_data.yscale < 0.0f ? -2160.0f : 2160.0f);
-            push_data.xoffset = 3840.0f;
-            push_data.yoffset = (push_data.yoffset < 0.0f ? -2160.0f : 2160.0f);
         }
         LOG_INFO(Render_Vulkan, "SIFAC 4K: pushdata xscale={:.1f} yscale={:.1f} xoffset={:.1f} yoffset={:.1f}",
                  push_data.xscale, push_data.yscale, push_data.xoffset, push_data.yoffset);
