@@ -195,7 +195,15 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         return;
     }
 
-    const auto& regs = liverpool->regs;
+    if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+        const auto& cb0 = regs.color_buffers[0];
+        const auto ext = liverpool->last_cb_extent[0];
+        const auto pdiag = MakeUserData(regs);
+        LOG_INFO(Render_Vulkan,
+                 "SIFAC 4K: Draw MRT0={:#x} ext={}x{} pd={:.0f}x{:.0f} off={:.0f},{:.0f}",
+                 cb0 ? cb0.Address() : 0u, ext.width, ext.height, pdiag.xscale, pdiag.yscale,
+                 pdiag.xoffset, pdiag.yoffset);
+    }
     const GraphicsPipeline* pipeline = pipeline_cache.GetGraphicsPipeline();
     if (!pipeline) {
         return;
