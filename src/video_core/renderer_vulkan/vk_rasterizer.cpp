@@ -195,6 +195,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset) {
         return;
     }
 
+    const auto& regs = liverpool->regs;
     if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
         const auto& cb0 = regs.color_buffers[0];
         const auto ext = liverpool->last_cb_extent[0];
