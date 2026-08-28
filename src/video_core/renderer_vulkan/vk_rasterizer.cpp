@@ -126,10 +126,14 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
             continue;
         }
         auto hint = liverpool->last_cb_extent[cb];
-        // SIFAC 4K: Force all color buffer extents to 3840x2160
-        if ((MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") && hint.width > 0 && hint.height > 0) {
-            if (hint.width != 3840 || hint.height != 2160) {
-                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing CB{} extent {}x{} -> 3840x2160", cb, hint.width, hint.height);
+        // SIFAC 4K: Force only main RT (3360x3360) and flip buffer (1920x1080) to 3840x2160
+        if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+            if (hint.width == 1920 && hint.height == 1080) {
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing flip buffer {}x{} -> 3840x2160", hint.width, hint.height);
+                hint.width = 3840;
+                hint.height = 2160;
+            } else if (hint.width == 3360 && hint.height == 3360) {
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing scene RT {}x{} -> 3840x2160", hint.width, hint.height);
                 hint.width = 3840;
                 hint.height = 2160;
             }
