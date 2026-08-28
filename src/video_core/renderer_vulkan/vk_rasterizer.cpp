@@ -404,10 +404,10 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     // Bind resource buffers and textures.
     Shader::Backend::Bindings binding{};
     push_data = MakeUserData(liverpool->regs);
-    // SIFAC 4K: Scale pushdata from 960x540 to 1920x1080 (matches 3840x2160 RT)
+    // SIFAC 4K: Scale flip buffer pushdata (960x540 -> 1920x1080) to match 3840x2160 viewport
     if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
         if (push_data.xscale == 960.0f && (push_data.yscale == 540.0f || push_data.yscale == -540.0f)) {
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling pushdata 1920x1080 -> 3840x2160");
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling flip buffer pushdata 1920x1080 -> 3840x2160");
             push_data.xscale = 1920.0f;
             push_data.yscale = (push_data.yscale < 0.0f ? -1080.0f : 1080.0f);
             push_data.xoffset = 1920.0f;
@@ -1105,13 +1105,13 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
-        // SIFAC 4K: Scale viewport from 1920x1080 to 3840x2160
-        bool sifac_scaled = false;
+        // SIFAC 4K: Scale flip buffer viewport (1920x1080) to 3840x2160
+        bool sifac_flip_scaled = false;
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
             if (viewport.width == 1920.0f && (viewport.height == 1080.0f || viewport.height == -1080.0f)) {
-                sifac_scaled = true;
+                sifac_flip_scaled = true;
                 float sign_h = viewport.height < 0.0f ? -1.0f : 1.0f;
-                LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling viewport {}x{} -> 3840x2160", viewport.width, viewport.height);
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Scaling flip buffer viewport {}x{} -> 3840x2160", viewport.width, viewport.height);
                 viewport.x = 0.0f;
                 viewport.y = sign_h * 2160.0f;
                 viewport.width = 3840.0f;
@@ -1139,7 +1139,7 @@ void Rasterizer::UpdateViewportScissorState() const {
 
 
 
-        if (sifac_scaled) {
+        if (sifac_flip_scaled) {
             vp_scsr.top_left_x = 0;
             vp_scsr.top_left_y = 0;
             vp_scsr.bottom_right_x = 3840;
