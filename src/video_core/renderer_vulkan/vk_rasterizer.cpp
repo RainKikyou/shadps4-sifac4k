@@ -400,6 +400,12 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
         // Detect UI pass: pushdata at 960x540 means UI layer
         if (push_data.xscale == 960.0f && (push_data.yscale == 540.0f || push_data.yscale == -540.0f)) {
             sifac_is_ui = true;
+            // Scale UI pushdata from 960x540 to 1920x1080 to match 1080p coordinate system
+            // Then viewport upscale handles 1920x1080 -> 3840x2160
+            push_data.xscale = 1920.0f;
+            push_data.yscale = (push_data.yscale < 0.0f ? -1080.0f : 1080.0f);
+            push_data.xoffset = 1920.0f;
+            push_data.yoffset = (push_data.yoffset < 0.0f ? -1080.0f : 1080.0f);
         }
         LOG_INFO(Render_Vulkan, "SIFAC 4K: pushdata xscale={:.1f} yscale={:.1f} xoffset={:.1f} yoffset={:.1f} ui={}",
                  push_data.xscale, push_data.yscale, push_data.xoffset, push_data.yoffset, sifac_is_ui);
@@ -1101,11 +1107,11 @@ void Rasterizer::UpdateViewportScissorState() const {
                      viewport.x, viewport.y, viewport.width, viewport.height);
         }
 
-        // Only upscale viewport for 3D passes, keep UI at 1080p
+        // Upscale viewport for all passes (UI and 3D) from 1920x1080 to 3840x2160
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
-            if (!sifac_is_ui && viewport.width == 1920.0f && (viewport.height == 1080.0f || viewport.height == -1080.0f)) {
+            if (viewport.width == 1920.0f && (viewport.height == 1080.0f || viewport.height == -1080.0f)) {
                 sifac_ui_1080p = true;
-                LOG_INFO(Render_Vulkan, "SIFAC 4K: 3D viewport upscaled to 4K");
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: viewport upscaled to 4K");
                 viewport.x = 0.0f;
                 viewport.y = 0.0f;
                 viewport.width = 3840.0f;
@@ -1134,8 +1140,8 @@ void Rasterizer::UpdateViewportScissorState() const {
                      vp_scsr.top_left_x, vp_scsr.top_left_y, vp_scsr.GetWidth(), vp_scsr.GetHeight());
         }
 
-        if (sifac_ui_1080p && !sifac_is_ui) {
-            LOG_INFO(Render_Vulkan, "SIFAC 4K: 3D scissor upscaled to 4K");
+        if (sifac_ui_1080p) {
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: scissor upscaled to 4K");
             vp_scsr.top_left_x = 0;
             vp_scsr.top_left_y = 0;
             vp_scsr.bottom_right_x = 3840;
