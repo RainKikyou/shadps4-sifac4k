@@ -9,6 +9,7 @@
 #include "SDL3/SDL_video.h"
 #include "common/assert.h"
 #include "common/config.h"
+#include "common/memory_patcher.h"
 #include "common/elf_info.h"
 #include "core/debug_state.h"
 #include "core/devtools/layer.h"
@@ -313,11 +314,18 @@ WindowSDL::WindowSDL(s32 width_, s32 height_, Input::GameController* controller_
         LOG_ERROR(Frontend, "Error getting display mode: {}", SDL_GetError());
         error = true;
     }
-    if (!error) {
-        SDL_SetWindowFullscreenMode(
-            window, Config::getFullscreenMode() == "Fullscreen" ? displayMode : NULL);
+    // SIFAC 4K mod: force windowed mode to allow RenderDoc capture and proper 4K output
+    if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+        SDL_SetWindowFullscreenMode(window, NULL);
+        SDL_SetWindowFullscreen(window, 0);
+        LOG_INFO(Frontend, "SIFAC 4K: forcing windowed mode");
+    } else {
+        if (!error) {
+            SDL_SetWindowFullscreenMode(
+                window, Config::getFullscreenMode() == "Fullscreen" ? displayMode : NULL);
+        }
+        SDL_SetWindowFullscreen(window, Config::getIsFullscreen());
     }
-    SDL_SetWindowFullscreen(window, Config::getIsFullscreen());
 
     SDL_InitSubSystem(SDL_INIT_GAMEPAD);
     controller->SetEngine(std::make_unique<Input::SDLInputEngine>());

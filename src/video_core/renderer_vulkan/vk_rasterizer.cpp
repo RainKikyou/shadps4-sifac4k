@@ -125,7 +125,15 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
             image_id = {};
             continue;
         }
-        const auto& hint = liverpool->last_cb_extent[cb];
+        auto hint = liverpool->last_cb_extent[cb];
+        // SIFAC 4K: Force all color buffer extents to 3840x2160
+        if ((MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") && hint.width > 0 && hint.height > 0) {
+            if (hint.width != 3840 || hint.height != 2160) {
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing CB{} extent {}x{} -> 3840x2160", cb, hint.width, hint.height);
+                hint.width = 3840;
+                hint.height = 2160;
+            }
+        }
         std::construct_at(&desc, col_buf, hint);
         image_id = bound_images.emplace_back(texture_cache.FindImage(desc));
         auto& image = texture_cache.GetImage(image_id);
