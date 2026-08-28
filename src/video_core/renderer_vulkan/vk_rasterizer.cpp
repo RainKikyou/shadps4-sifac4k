@@ -396,6 +396,15 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     Shader::Backend::Bindings binding{};
     push_data = MakeUserData(liverpool->regs);
     if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
+        // Scale pushdata from 960x540 to 1920x1080 to match original 1080p coordinate system
+        // Then viewport upscale handles 1920x1080 -> 3840x2160
+        if (push_data.xscale == 960.0f && (push_data.yscale == 540.0f || push_data.yscale == -540.0f)) {
+            LOG_INFO(Render_Vulkan, "SIFAC 4K: pushdata upscaled 960x540 to 1920x1080");
+            push_data.xscale = 1920.0f;
+            push_data.yscale = (push_data.yscale < 0.0f ? -1080.0f : 1080.0f);
+            push_data.xoffset = 1920.0f;
+            push_data.yoffset = (push_data.yoffset < 0.0f ? -1080.0f : 1080.0f);
+        }
         LOG_INFO(Render_Vulkan, "SIFAC 4K: pushdata xscale={:.1f} yscale={:.1f} xoffset={:.1f} yoffset={:.1f}",
                  push_data.xscale, push_data.yscale, push_data.xoffset, push_data.yoffset);
     }
