@@ -7,6 +7,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include "common/assert.h"
+#include "core/emulator_settings.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_discard_frag.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_quad_rect.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
@@ -401,7 +402,9 @@ GraphicsPipeline::GraphicsPipeline(
 
     const vk::GraphicsPipelineCreateInfo pipeline_info = {
         .pNext = &pipeline_rendering_ci,
-        .flags = vk::PipelineCreateFlagBits::eDisableOptimization,
+        .flags = EmulatorSettings.IsNvidiaWoDisableOptimization()
+                     ? vk::PipelineCreateFlagBits::eDisableOptimization
+                     : vk::PipelineCreateFlagBits{},
         .stageCount = static_cast<u32>(shader_stages.size()),
         .pStages = shader_stages.data(),
         .pVertexInputState = !instance.IsVertexInputDynamicState() ? &vertex_input_info : nullptr,
@@ -528,7 +531,8 @@ void GraphicsPipeline::BuildDescSetLayout(bool preloading) {
             });
         }
     }
-    uses_push_descriptors = binding < instance.MaxPushDescriptors();
+    uses_push_descriptors =
+        EmulatorSettings.IsNvidiaWoPushDescriptors() && binding < instance.MaxPushDescriptors();
     const auto flags = uses_push_descriptors
                            ? vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR
                            : vk::DescriptorSetLayoutCreateFlagBits{};

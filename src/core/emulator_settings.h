@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
+// SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
@@ -480,6 +480,10 @@ struct VulkanSettings {
     Setting<bool> vkguest_markers{false};
     Setting<bool> pipeline_cache_enabled{false};
     Setting<bool> pipeline_cache_archived{false};
+    // NVIDIA driver workaround toggles (diagnostic). Keep defaults matching the
+    // current behaviour; flip per title in the custom config to bisect driver bugs.
+    Setting<bool> nvidia_wo_disable_optimization{true};
+    Setting<bool> nvidia_wo_push_descriptors{true};
     std::vector<OverrideItem> GetOverrideableFields() const {
         return std::vector<OverrideItem>{
             make_override<VulkanSettings>("gpu_id", &VulkanSettings::gpu_id),
@@ -500,6 +504,10 @@ struct VulkanSettings {
                                           &VulkanSettings::pipeline_cache_enabled),
             make_override<VulkanSettings>("pipeline_cache_archived",
                                           &VulkanSettings::pipeline_cache_archived),
+            make_override<VulkanSettings>("nvidia_wo_disable_optimization",
+                                          &VulkanSettings::nvidia_wo_disable_optimization),
+            make_override<VulkanSettings>("nvidia_wo_push_descriptors",
+                                          &VulkanSettings::nvidia_wo_push_descriptors),
         };
     }
 };
@@ -507,7 +515,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VulkanSettings, gpu_id, renderdoc_enabled, vk
                                    vkvalidation_core_enabled, vkvalidation_sync_enabled,
                                    vkvalidation_gpu_enabled, vkcrash_diagnostic_enabled,
                                    vkhost_markers, vkguest_markers, pipeline_cache_enabled,
-                                   pipeline_cache_archived)
+                                   pipeline_cache_archived, nvidia_wo_disable_optimization,
+                                   nvidia_wo_push_descriptors)
 
 // -------------------------------
 // Main manager
@@ -787,6 +796,8 @@ public:
     SETTING_FORWARD_BOOL(m_vulkan, VkGuestMarkersEnabled, vkguest_markers)
     SETTING_FORWARD_BOOL(m_vulkan, PipelineCacheEnabled, pipeline_cache_enabled)
     SETTING_FORWARD_BOOL(m_vulkan, PipelineCacheArchived, pipeline_cache_archived)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoDisableOptimization, nvidia_wo_disable_optimization)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoPushDescriptors, nvidia_wo_push_descriptors)
 
 #undef SETTING_FORWARD
 #undef SETTING_FORWARD_BOOL
