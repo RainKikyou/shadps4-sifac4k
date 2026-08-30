@@ -486,6 +486,11 @@ struct VulkanSettings {
     Setting<bool> nvidia_wo_push_descriptors{true};
     // Swapchain-level NVIDIA driver workarounds (diagnostic).
     Setting<bool> nvidia_wo_min_images{false};
+    // Present the swapchain image through a copy-out/copy-in pass before
+    // vkQueuePresentKHR, mimicking RenderDoc's capture behavior. This routes
+    // around the NVIDIA 610.88 windowed (DWM-composited) present deadlock that
+    // the raw present path triggers.
+    Setting<bool> nvidia_wo_present_copy{false};
     // B8G8R8A8 swapchain: NVIDIA 610.88 deadlocks in the present path when the
     // swapchain uses R8G8B8A8 (TDR after ~10-40 presents). BGRA, the format the
     // Windows compositor natively uses, routes around the driver bug entirely.
@@ -516,6 +521,8 @@ struct VulkanSettings {
                                           &VulkanSettings::nvidia_wo_push_descriptors),
             make_override<VulkanSettings>("nvidia_wo_min_images",
                                           &VulkanSettings::nvidia_wo_min_images),
+            make_override<VulkanSettings>("nvidia_wo_present_copy",
+                                          &VulkanSettings::nvidia_wo_present_copy),
             make_override<VulkanSettings>("nvidia_wo_bgra", &VulkanSettings::nvidia_wo_bgra),
         };
     }
@@ -525,7 +532,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VulkanSettings, gpu_id, renderdoc_enabled, vk
                                    vkvalidation_gpu_enabled, vkcrash_diagnostic_enabled,
                                    vkhost_markers, vkguest_markers, pipeline_cache_enabled,
                                    pipeline_cache_archived, nvidia_wo_disable_optimization,
-                                   nvidia_wo_push_descriptors, nvidia_wo_min_images, nvidia_wo_bgra)
+                                   nvidia_wo_push_descriptors, nvidia_wo_min_images,
+                                   nvidia_wo_present_copy, nvidia_wo_bgra)
 
 // -------------------------------
 // Main manager
@@ -808,6 +816,7 @@ public:
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoDisableOptimization, nvidia_wo_disable_optimization)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoPushDescriptors, nvidia_wo_push_descriptors)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoMinImages, nvidia_wo_min_images)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoPresentCopy, nvidia_wo_present_copy)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoBgra, nvidia_wo_bgra)
 
 #undef SETTING_FORWARD
