@@ -192,12 +192,19 @@ void Swapchain::FindPresentFormat() {
     // Try to find a suitable format.
     for (const vk::SurfaceFormatKHR& sformat : formats) {
         vk::Format format = sformat.format;
-        if (format != vk::Format::eR8G8B8A8Unorm && format != vk::Format::eB8G8R8A8Unorm) {
+        if (EmulatorSettings.IsNvidiaWoBgra()) {
+            // Diagnostic: prefer BGRA (the format Windows presents to the compositor by
+            // default) to route around NVIDIA 610.88 present-path issues with RGBA.
+            if (format != vk::Format::eB8G8R8A8Unorm) {
+                continue;
+            }
+        } else if (format != vk::Format::eR8G8B8A8Unorm && format != vk::Format::eB8G8R8A8Unorm) {
             continue;
         }
 
         surface_format.format = format;
         surface_format.colorSpace = sformat.colorSpace;
+        LOG_INFO(Render_Vulkan, "Swapchain format: {}", vk::to_string(format));
         return;
     }
 
@@ -252,6 +259,13 @@ void Swapchain::SetSurfaceProperties() {
 
     // Select number of images in swap chain, we prefer one buffer in the background to work on
     image_count = capabilities.minImageCount + 1;
+    if (EmulatorSettings.IsNvidiaWoMinImages()) {
+        // Diagnostic: use the minimum image count to reduce the driver's swapchain
+        // buffering, which can help isolate NVIDIA 610.88 present-path deadlocks.
+        image_count = capabilities.minImageCount;
+        LOG_INFO(Render_Vulkan, "NVIDIA workaround: using min swapchain image count = {}",
+                 image_count);
+    }
     if (capabilities.maxImageCount > 0) {
         image_count = std::min(image_count, capabilities.maxImageCount);
     }

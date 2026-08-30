@@ -484,6 +484,9 @@ struct VulkanSettings {
     // current behaviour; flip per title in the custom config to bisect driver bugs.
     Setting<bool> nvidia_wo_disable_optimization{true};
     Setting<bool> nvidia_wo_push_descriptors{true};
+    // Swapchain-level NVIDIA driver workarounds (diagnostic).
+    Setting<bool> nvidia_wo_min_images{false};
+    Setting<bool> nvidia_wo_bgra{false};
     std::vector<OverrideItem> GetOverrideableFields() const {
         return std::vector<OverrideItem>{
             make_override<VulkanSettings>("gpu_id", &VulkanSettings::gpu_id),
@@ -508,6 +511,9 @@ struct VulkanSettings {
                                           &VulkanSettings::nvidia_wo_disable_optimization),
             make_override<VulkanSettings>("nvidia_wo_push_descriptors",
                                           &VulkanSettings::nvidia_wo_push_descriptors),
+            make_override<VulkanSettings>("nvidia_wo_min_images",
+                                          &VulkanSettings::nvidia_wo_min_images),
+            make_override<VulkanSettings>("nvidia_wo_bgra", &VulkanSettings::nvidia_wo_bgra),
         };
     }
 };
@@ -516,7 +522,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VulkanSettings, gpu_id, renderdoc_enabled, vk
                                    vkvalidation_gpu_enabled, vkcrash_diagnostic_enabled,
                                    vkhost_markers, vkguest_markers, pipeline_cache_enabled,
                                    pipeline_cache_archived, nvidia_wo_disable_optimization,
-                                   nvidia_wo_push_descriptors)
+                                   nvidia_wo_push_descriptors, nvidia_wo_min_images, nvidia_wo_bgra)
 
 // -------------------------------
 // Main manager
@@ -798,6 +804,8 @@ public:
     SETTING_FORWARD_BOOL(m_vulkan, PipelineCacheArchived, pipeline_cache_archived)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoDisableOptimization, nvidia_wo_disable_optimization)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoPushDescriptors, nvidia_wo_push_descriptors)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoMinImages, nvidia_wo_min_images)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoBgra, nvidia_wo_bgra)
 
 #undef SETTING_FORWARD
 #undef SETTING_FORWARD_BOOL
