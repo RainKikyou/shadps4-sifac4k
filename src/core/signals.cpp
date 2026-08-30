@@ -12,8 +12,8 @@
 #include "emulator.h"
 
 #ifdef _WIN32
-#include <windows.h>
 #include <psapi.h>
+#include <windows.h>
 static constexpr DWORD MS_VC_EXCEPTION = 0x406D1388;
 #else
 #include <csignal>
@@ -166,8 +166,9 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                 module_base = reinterpret_cast<u64>(mod_info.lpBaseOfDll);
             }
         }
-        LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {} (in module: {}, base {:#x}, "
-                            "offset {:#x})",
+        LOG_CRITICAL(Debug,
+                     "Unhandled Exception code {:#x} at {} (in module: {}, base {:#x}, "
+                     "offset {:#x})",
                      code, address, module_name, module_base,
                      reinterpret_cast<u64>(address) - module_base);
         // Disassemble the faulting instruction stream to hint at the access
