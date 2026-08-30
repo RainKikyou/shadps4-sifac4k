@@ -13,6 +13,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <psapi.h>
 static constexpr DWORD MS_VC_EXCEPTION = 0x406D1388;
 #else
 #include <csignal>
@@ -146,6 +147,7 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
         // driver/loader crash (e.g. nvoglv64.dll, vulkan-1.dll) from emulator code.
         std::string module_name = "<unknown>";
         HMODULE faulting_module = nullptr;
+        u64 module_base = 0;
         if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                                    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                static_cast<LPCWSTR>(address), &faulting_module)) {
@@ -158,9 +160,16 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                 WideCharToMultiByte(CP_UTF8, 0, wname.data(), static_cast<int>(len),
                                     module_name.data(), utf8_len, nullptr, nullptr);
             }
+            MODULEINFO mod_info{};
+            if (K32GetModuleInformation(GetCurrentProcess(), faulting_module, &mod_info,
+                                        sizeof(mod_info))) {
+                module_base = reinterpret_cast<u64>(mod_info.lpBaseOfDll);
+            }
         }
-        LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {} (in module: {})", code, address,
-                     module_name);
+        LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {} (in module: {}, base {:#x}, "
+                            "offset {:#x})",
+                     code, address, module_name, module_base,
+                     reinterpret_cast<u64>(address) - module_base);
         // Disassemble the faulting instruction stream to hint at the access
         // pattern (e.g. null deref vs invalid address) when the crash is inside
         // a driver/loader module such as nvwgf2umx.dll.
