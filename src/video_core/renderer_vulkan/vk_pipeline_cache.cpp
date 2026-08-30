@@ -331,6 +331,20 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
         LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {:#x}", pipeline_hash);
 
         GraphicsPipeline::SerializationSupport sdata{};
+        // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
+        // (nvlddmkm TDR event 153) when a new pipeline is created while the GPU is
+        // still executing previously submitted frames. RenderDoc avoids this by
+        // serializing GPU work; mimic that here, NVIDIA only.
+        if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+            const auto t_wait_begin = std::chrono::steady_clock::now();
+            instance.GetGraphicsQueue().waitIdle();
+            const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now() - t_wait_begin)
+                                     .count();
+            LOG_INFO(Render_Vulkan,
+                     "Serialized GPU (waitIdle {} ms) before creating graphics pipeline {:#x}",
+                     wait_ms, pipeline_hash);
+        }
         const auto t_pipe_begin = std::chrono::steady_clock::now();
         it.value() = std::make_unique<GraphicsPipeline>(
             instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
@@ -366,6 +380,17 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         LOG_INFO(Render_Vulkan, "Compiling compute pipeline {:#x}", pipeline_hash);
 
         ComputePipeline::SerializationSupport sdata{};
+        // See the same NVIDIA serialization note in GetGraphicsPipeline().
+        if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+            const auto t_wait_begin = std::chrono::steady_clock::now();
+            instance.GetGraphicsQueue().waitIdle();
+            const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now() - t_wait_begin)
+                                     .count();
+            LOG_INFO(Render_Vulkan,
+                     "Serialized GPU (waitIdle {} ms) before creating compute pipeline {:#x}",
+                     wait_ms, pipeline_hash);
+        }
         const auto t_pipe_begin = std::chrono::steady_clock::now();
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,
                                                        *pipeline_cache, compute_key, *infos[0],

@@ -12,6 +12,7 @@
 
 #include "video_core/host_shaders/tiling_comp.h"
 
+#include <chrono>
 #include <magic_enum/magic_enum.hpp>
 #include <vk_mem_alloc.h>
 
@@ -156,6 +157,12 @@ vk::Pipeline TileManager::GetTilingPipeline(const ImageInfo& info, bool is_tiler
         .stage = shader_ci,
         .layout = *pl_layout,
     };
+    // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
+    // (nvlddmkm TDR event 153) when a new pipeline is created while the GPU is
+    // still executing previously submitted frames. Serialize, NVIDIA only.
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+        instance.GetGraphicsQueue().waitIdle();
+    }
     auto [result, pipeline] =
         device.createComputePipelineUnique(VK_NULL_HANDLE, compute_pipeline_ci);
     if (result != vk::Result::eSuccess) {
