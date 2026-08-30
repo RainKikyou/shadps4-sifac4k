@@ -581,7 +581,8 @@ void Presenter::RecreateFrame(Frame* frame, u32 width, u32 height) {
     SetObjectName(device, frame->image, "Frame image #{}", frame->id);
 
     // Create the NVIDIA present-copy staging image (lazy, once per size).
-    if (EmulatorSettings.IsNvidiaWoPresentCopy() && !present_staging) {
+    if (EmulatorSettings.IsNvidiaWoPresentCopy() &&
+        instance.GetDriverID() == vk::DriverId::eNvidiaProprietary && !present_staging) {
         const vk::ImageCreateInfo staging_ci{
             .imageType = vk::ImageType::e2D,
             .format = format,
@@ -1055,7 +1056,10 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
         // copy-out/copy-in pass before present to mimic RenderDoc's capture. This
         // forces the driver to process the image through the transfer path, which
         // avoids the 610.88 deadlock on the raw windowed (DWM-composited) present.
-        const bool present_copy = EmulatorSettings.IsNvidiaWoPresentCopy() && present_staging;
+        // Only applied on NVIDIA drivers; other vendors keep the direct path.
+        const bool present_copy = EmulatorSettings.IsNvidiaWoPresentCopy() &&
+                                  instance.GetDriverID() == vk::DriverId::eNvidiaProprietary &&
+                                  present_staging;
         if (present_copy) {
             const vk::ImageSubresourceLayers layers{
                 .aspectMask = vk::ImageAspectFlagBits::eColor,
