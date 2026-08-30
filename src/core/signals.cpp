@@ -161,6 +161,26 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
         }
         LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {} (in module: {})", code, address,
                      module_name);
+        // Disassemble the faulting instruction stream to hint at the access
+        // pattern (e.g. null deref vs invalid address) when the crash is inside
+        // a driver/loader module such as nvwgf2umx.dll.
+        {
+            u64 disasm_addr = reinterpret_cast<u64>(address);
+            for (int i = 0; i < 4; ++i) {
+                ZydisDecodedInstruction inst;
+                ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+                const auto status = Common::Decoder::Instance()->decodeInstruction(
+                    inst, operands, reinterpret_cast<void*>(disasm_addr), 15);
+                if (!ZYAN_SUCCESS(status)) {
+                    LOG_CRITICAL(Debug, "  {:#x}: <unable to decode>", disasm_addr);
+                    break;
+                }
+                LOG_CRITICAL(
+                    Debug, "  {}",
+                    Common::Decoder::Instance()->disassembleInst(inst, operands, disasm_addr));
+                disasm_addr += inst.length;
+            }
+        }
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
 
