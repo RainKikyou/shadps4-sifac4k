@@ -195,6 +195,10 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
+    // Serialize GPU submissions (mimics RenderDoc's serialized submit behaviour) to
+    // work around an NVIDIA driver hang on some title render passes.
+    instance.GetGraphicsQueue().waitIdle();
+
     // Release submit_mutex before Refresh/Allocate/PopPendingOperations to avoid
     // deadlock if a deferred callback re-enters SubmitExecution on the same thread.
     lk.unlock();
