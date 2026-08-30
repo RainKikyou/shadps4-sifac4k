@@ -486,7 +486,10 @@ struct VulkanSettings {
     Setting<bool> nvidia_wo_push_descriptors{true};
     // Swapchain-level NVIDIA driver workarounds (diagnostic).
     Setting<bool> nvidia_wo_min_images{false};
-    Setting<bool> nvidia_wo_bgra{false};
+    // B8G8R8A8 swapchain: NVIDIA 610.88 deadlocks in the present path when the
+    // swapchain uses R8G8B8A8 (TDR after ~10-40 presents). BGRA, the format the
+    // Windows compositor natively uses, routes around the driver bug entirely.
+    Setting<bool> nvidia_wo_bgra{true};
     std::vector<OverrideItem> GetOverrideableFields() const {
         return std::vector<OverrideItem>{
             make_override<VulkanSettings>("gpu_id", &VulkanSettings::gpu_id),
