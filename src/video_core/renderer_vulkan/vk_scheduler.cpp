@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <atomic>
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/logging/log.h"
@@ -192,7 +193,14 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     };
 
     ImGui::Core::TextureManager::Submit();
+    static std::atomic<size_t> submit_count{0};
+    const auto submit_no = submit_count.fetch_add(1) + 1;
+    LOG_INFO(Render_Vulkan, "Queue submit #{}, timeline_signal={}", submit_no, signal_value);
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
+    if (submit_result == vk::Result::eErrorDeviceLost) {
+        LOG_CRITICAL(Render_Vulkan, "Queue submit #{}: VK_ERROR_DEVICE_LOST (GPU TDR occurred)",
+                     submit_no);
+    }
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
     // Release submit_mutex before Refresh/Allocate/PopPendingOperations to avoid

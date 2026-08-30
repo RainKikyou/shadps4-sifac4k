@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 #include <boost/container/small_vector.hpp>
 
@@ -416,8 +417,17 @@ GraphicsPipeline::GraphicsPipeline(
         .layout = *pipeline_layout,
     };
 
+    LOG_INFO(Render_Vulkan,
+             "vkCreateGraphicsPipelines begin: [{}] stages={} num_cb={} vk_topology={}", debug_str,
+             shader_stages.size(), key.num_color_attachments, vk::to_string(topology));
+    const auto t_pipe_begin = std::chrono::steady_clock::now();
     auto [pipeline_result, pipe] =
         device.createGraphicsPipelineUnique(pipeline_cache, pipeline_info);
+    const auto pipe_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - t_pipe_begin)
+                             .count();
+    LOG_INFO(Render_Vulkan, "vkCreateGraphicsPipelines end: [{}] result={} elapsed={} ms",
+             debug_str, vk::to_string(pipeline_result), pipe_ms);
     ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create graphics pipeline: {}",
                vk::to_string(pipeline_result));
     pipeline = std::move(pipe);
