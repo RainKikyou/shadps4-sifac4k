@@ -142,7 +142,25 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                                       ? static_protection_exception
                                       : code != EXCEPTION_BREAKPOINT;
     if (report_unhandled) { // Windows static guest red-zone protection
-        LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {}", code, address);
+        // Resolve the module that contains the faulting address to distinguish a
+        // driver/loader crash (e.g. nvoglv64.dll, vulkan-1.dll) from emulator code.
+        std::string module_name = "<unknown>";
+        HMODULE faulting_module = nullptr;
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               static_cast<LPCWSTR>(address), &faulting_module)) {
+            std::wstring wname(MAX_PATH, L'\0');
+            const DWORD len = GetModuleFileNameW(faulting_module, wname.data(), MAX_PATH);
+            if (len > 0) {
+                const int utf8_len = WideCharToMultiByte(
+                    CP_UTF8, 0, wname.data(), static_cast<int>(len), nullptr, 0, nullptr, nullptr);
+                module_name.resize(utf8_len);
+                WideCharToMultiByte(CP_UTF8, 0, wname.data(), static_cast<int>(len),
+                                    module_name.data(), utf8_len, nullptr, nullptr);
+            }
+        }
+        LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {} (in module: {})", code, address,
+                     module_name);
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
 
