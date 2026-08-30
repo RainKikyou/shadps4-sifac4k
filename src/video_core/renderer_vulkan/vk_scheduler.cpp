@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <atomic>
+#include <chrono>
 #include "common/assert.h"
 #include "common/debug.h"
 #include "common/logging/log.h"
@@ -202,6 +203,20 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
                      submit_no);
     }
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
+
+    // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
+    // (nvlddmkm TDR event 153) when submissions to the graphics queue overlap
+    // in execution. The RenderDoc layer works around it by serializing every
+    // submission; replicate that on NVIDIA only (AMD is unaffected).
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+        const auto t_wait_begin = std::chrono::steady_clock::now();
+        instance.GetGraphicsQueue().waitIdle();
+        const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - t_wait_begin)
+                                 .count();
+        LOG_INFO(Render_Vulkan, "Serialized GPU after submit #{} (waitIdle {} ms)", submit_no,
+                 wait_ms);
+    }
 
     // Release submit_mutex before Refresh/Allocate/PopPendingOperations to avoid
     // deadlock if a deferred callback re-enters SubmitExecution on the same thread.
