@@ -5,6 +5,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include "common/logging/log.h"
+#include "core/emulator_settings.h"
 #include "shader_recompiler/info.h"
 #include "video_core/renderer_vulkan/vk_compute_pipeline.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -74,7 +75,8 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
         .size = sizeof(Shader::PushData),
     };
 
-    uses_push_descriptors = binding < instance.MaxPushDescriptors();
+    uses_push_descriptors =
+        EmulatorSettings.IsNvidiaWoPushDescriptors() && binding < instance.MaxPushDescriptors();
     const auto flags = uses_push_descriptors
                            ? vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR
                            : vk::DescriptorSetLayoutCreateFlagBits{};
@@ -105,7 +107,9 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
     SetObjectName(device, *pipeline_layout, "Compute PipelineLayout {}", debug_str);
 
     const vk::ComputePipelineCreateInfo compute_pipeline_ci = {
-        .flags = vk::PipelineCreateFlagBits::eDisableOptimization,
+        .flags = EmulatorSettings.IsNvidiaWoDisableOptimization()
+                     ? vk::PipelineCreateFlagBits::eDisableOptimization
+                     : vk::PipelineCreateFlagBits{},
         .stage = shader_ci,
         .layout = *pipeline_layout,
     };
