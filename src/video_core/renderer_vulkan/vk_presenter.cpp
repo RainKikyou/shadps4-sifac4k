@@ -600,8 +600,6 @@ void Presenter::RecreateFrame(Frame* frame, u32 width, u32 height) {
         if (staging_result == VK_SUCCESS) {
             present_staging = vk::Image{unsafe_staging};
             SetObjectName(device, present_staging, "Present copy staging");
-            LOG_INFO(Render_Vulkan, "NVIDIA present-copy workaround: created staging image {}x{}",
-                     width, height);
         } else {
             LOG_ERROR(Render_Vulkan, "Failed to create present-copy staging image: {}",
                       vk::to_string(vk::Result{staging_result}));

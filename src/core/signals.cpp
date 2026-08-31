@@ -12,7 +12,6 @@
 #include "emulator.h"
 
 #ifdef _WIN32
-#include <psapi.h>
 #include <windows.h>
 static constexpr DWORD MS_VC_EXCEPTION = 0x406D1388;
 #else
@@ -143,54 +142,7 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                                       ? static_protection_exception
                                       : code != EXCEPTION_BREAKPOINT;
     if (report_unhandled) { // Windows static guest red-zone protection
-        // Resolve the module that contains the faulting address to distinguish a
-        // driver/loader crash (e.g. nvoglv64.dll, vulkan-1.dll) from emulator code.
-        std::string module_name = "<unknown>";
-        HMODULE faulting_module = nullptr;
-        u64 module_base = 0;
-        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                                   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                               static_cast<LPCWSTR>(address), &faulting_module)) {
-            std::wstring wname(MAX_PATH, L'\0');
-            const DWORD len = GetModuleFileNameW(faulting_module, wname.data(), MAX_PATH);
-            if (len > 0) {
-                const int utf8_len = WideCharToMultiByte(
-                    CP_UTF8, 0, wname.data(), static_cast<int>(len), nullptr, 0, nullptr, nullptr);
-                module_name.resize(utf8_len);
-                WideCharToMultiByte(CP_UTF8, 0, wname.data(), static_cast<int>(len),
-                                    module_name.data(), utf8_len, nullptr, nullptr);
-            }
-            MODULEINFO mod_info{};
-            if (K32GetModuleInformation(GetCurrentProcess(), faulting_module, &mod_info,
-                                        sizeof(mod_info))) {
-                module_base = reinterpret_cast<u64>(mod_info.lpBaseOfDll);
-            }
-        }
-        LOG_CRITICAL(Debug,
-                     "Unhandled Exception code {:#x} at {} (in module: {}, base {:#x}, "
-                     "offset {:#x})",
-                     code, address, module_name, module_base,
-                     reinterpret_cast<u64>(address) - module_base);
-        // Disassemble the faulting instruction stream to hint at the access
-        // pattern (e.g. null deref vs invalid address) when the crash is inside
-        // a driver/loader module such as nvwgf2umx.dll.
-        {
-            u64 disasm_addr = reinterpret_cast<u64>(address);
-            for (int i = 0; i < 4; ++i) {
-                ZydisDecodedInstruction inst;
-                ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-                const auto status = Common::Decoder::Instance()->decodeInstruction(
-                    inst, operands, reinterpret_cast<void*>(disasm_addr), 15);
-                if (!ZYAN_SUCCESS(status)) {
-                    LOG_CRITICAL(Debug, "  {:#x}: <unable to decode>", disasm_addr);
-                    break;
-                }
-                LOG_CRITICAL(
-                    Debug, "  {}",
-                    Common::Decoder::Instance()->disassembleInst(inst, operands, disasm_addr));
-                disasm_addr += inst.length;
-            }
-        }
+        LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {}", code, address);
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
 

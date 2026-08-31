@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
-#include <chrono>
 #include <limits>
 #include "common/assert.h"
 #include "common/logging/log.h"
@@ -105,16 +104,9 @@ void Swapchain::SetHDR(bool hdr) {
 
 bool Swapchain::AcquireNextImage() {
     vk::Device device = instance.GetDevice();
-    const auto t_acquire_begin = std::chrono::steady_clock::now();
-    LOG_INFO(Render_Vulkan, "Swapchain: acquiring next image (frame_index={})", frame_index);
     vk::Result result =
         device.acquireNextImageKHR(swapchain, std::numeric_limits<u64>::max(),
                                    image_acquired[frame_index], VK_NULL_HANDLE, &image_index);
-    const auto acquire_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now() - t_acquire_begin)
-                                .count();
-    LOG_INFO(Render_Vulkan, "Swapchain: acquired image {} in {} ms (result={})", image_index,
-             acquire_ms, vk::to_string(result));
 
     switch (result) {
     case vk::Result::eSuccess:
@@ -145,14 +137,7 @@ bool Swapchain::Present() {
         .pImageIndices = &image_index,
     };
 
-    const auto t_present_begin = std::chrono::steady_clock::now();
-    LOG_INFO(Render_Vulkan, "Swapchain: presenting image {}", image_index);
     auto result = instance.GetPresentQueue().presentKHR(present_info);
-    const auto present_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now() - t_present_begin)
-                                .count();
-    LOG_INFO(Render_Vulkan, "Swapchain: presented image {} in {} ms (result={})", image_index,
-             present_ms, vk::to_string(result));
     if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
         needs_recreation = true;
     } else {
@@ -204,7 +189,6 @@ void Swapchain::FindPresentFormat() {
 
         surface_format.format = format;
         surface_format.colorSpace = sformat.colorSpace;
-        LOG_INFO(Render_Vulkan, "Swapchain format: {}", vk::to_string(format));
         return;
     }
 

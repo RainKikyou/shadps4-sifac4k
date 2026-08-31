@@ -296,11 +296,6 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
         .apiVersion = TargetVulkanApiVersion,
     };
 
-    LOG_INFO(Render_Vulkan, "CreateInstance: requesting apiVersion {}.{}.{} (driver max {}.{}.{})",
-             VK_VERSION_MAJOR(TargetVulkanApiVersion), VK_VERSION_MINOR(TargetVulkanApiVersion),
-             VK_VERSION_PATCH(TargetVulkanApiVersion), VK_VERSION_MAJOR(available_version),
-             VK_VERSION_MINOR(available_version), VK_VERSION_PATCH(available_version));
-
     const std::string extensions_string = fmt::format("{}", fmt::join(extensions, ", "));
     const std::string layers_string = fmt::format("{}", fmt::join(layers, ", "));
     LOG_INFO(Render_Vulkan, "Enabled instance extensions: {}", extensions_string);

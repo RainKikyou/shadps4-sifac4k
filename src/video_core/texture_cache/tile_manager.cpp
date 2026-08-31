@@ -12,7 +12,6 @@
 
 #include "video_core/host_shaders/tiling_comp.h"
 
-#include <chrono>
 #include <magic_enum/magic_enum.hpp>
 #include <vk_mem_alloc.h>
 

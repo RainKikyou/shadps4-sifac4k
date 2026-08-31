@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include <chrono>
 #include <boost/container/small_vector.hpp>
 
 #include "common/logging/log.h"
@@ -113,15 +112,8 @@ ComputePipeline::ComputePipeline(const Instance& instance, Scheduler& scheduler,
         .stage = shader_ci,
         .layout = *pipeline_layout,
     };
-    LOG_INFO(Render_Vulkan, "vkCreateComputePipelines begin: [{}]", debug_str);
-    const auto t_pipe_begin = std::chrono::steady_clock::now();
     auto [pipeline_result, pipe] =
         instance.GetDevice().createComputePipelineUnique(pipeline_cache, compute_pipeline_ci);
-    const auto pipe_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                             std::chrono::steady_clock::now() - t_pipe_begin)
-                             .count();
-    LOG_INFO(Render_Vulkan, "vkCreateComputePipelines end: [{}] result={} elapsed={} ms", debug_str,
-             vk::to_string(pipeline_result), pipe_ms);
     ASSERT_MSG(pipeline_result == vk::Result::eSuccess, "Failed to create compute pipeline: {}",
                vk::to_string(pipeline_result));
     pipeline = std::move(pipe);

@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include <chrono>
 #include <ranges>
 
 #include "common/hash.h"
@@ -336,23 +335,11 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
         // still executing previously submitted frames. RenderDoc avoids this by
         // serializing GPU work; mimic that here, NVIDIA only.
         if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
-            const auto t_wait_begin = std::chrono::steady_clock::now();
             instance.GetGraphicsQueue().waitIdle();
-            const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     std::chrono::steady_clock::now() - t_wait_begin)
-                                     .count();
-            LOG_INFO(Render_Vulkan,
-                     "Serialized GPU (waitIdle {} ms) before creating graphics pipeline {:#x}",
-                     wait_ms, pipeline_hash);
         }
-        const auto t_pipe_begin = std::chrono::steady_clock::now();
         it.value() = std::make_unique<GraphicsPipeline>(
             instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
             runtime_infos, fetch_shader, modules, sdata, false);
-        const auto pipe_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now() - t_pipe_begin)
-                                 .count();
-        LOG_INFO(Render_Vulkan, "Graphics pipeline {:#x} created in {} ms", pipeline_hash, pipe_ms);
 
         RegisterPipelineData(graphics_key, pipeline_hash, sdata);
         ++num_new_pipelines;
@@ -382,23 +369,11 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         ComputePipeline::SerializationSupport sdata{};
         // See the same NVIDIA serialization note in GetGraphicsPipeline().
         if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
-            const auto t_wait_begin = std::chrono::steady_clock::now();
             instance.GetGraphicsQueue().waitIdle();
-            const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     std::chrono::steady_clock::now() - t_wait_begin)
-                                     .count();
-            LOG_INFO(Render_Vulkan,
-                     "Serialized GPU (waitIdle {} ms) before creating compute pipeline {:#x}",
-                     wait_ms, pipeline_hash);
         }
-        const auto t_pipe_begin = std::chrono::steady_clock::now();
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,
                                                        *pipeline_cache, compute_key, *infos[0],
                                                        modules[0], sdata, false);
-        const auto pipe_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now() - t_pipe_begin)
-                                 .count();
-        LOG_INFO(Render_Vulkan, "Compute pipeline {:#x} created in {} ms", pipeline_hash, pipe_ms);
 
         RegisterPipelineData(compute_key, sdata);
         ++num_new_pipelines;
@@ -651,7 +626,6 @@ vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::Runtim
              perm_idx != 0 ? "(permutation)" : "");
     DumpShader(code, info.pgm_hash, info.stage, perm_idx, "bin");
 
-    const auto t_compile_begin = std::chrono::steady_clock::now();
     const auto ir_program = Shader::TranslateProgram(code, pools, info, runtime_info, profile);
     auto spv = Shader::Backend::SPIRV::EmitSPIRV(profile, runtime_info, ir_program, binding);
     DumpShader(spv, info.pgm_hash, info.stage, perm_idx, "spv");
@@ -666,12 +640,6 @@ vk::ShaderModule PipelineCache::CompileModule(Shader::Info& info, Shader::Runtim
     } else {
         module = CompileSPV(spv, instance.GetDevice());
     }
-    const auto compile_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now() - t_compile_begin)
-                                .count();
-    LOG_INFO(Render_Vulkan, "Compiled {} shader {:#x} {}: spv_words={} elapsed={} ms (perm_idx={})",
-             info.stage, info.pgm_hash, perm_idx != 0 ? "(permutation)" : "", spv.size(),
-             compile_ms, perm_idx);
 
     RegisterShaderBinary(std::move(spv), info.pgm_hash, perm_idx);
 
