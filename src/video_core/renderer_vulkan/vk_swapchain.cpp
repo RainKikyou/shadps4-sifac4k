@@ -177,9 +177,12 @@ void Swapchain::FindPresentFormat() {
     // Try to find a suitable format.
     for (const vk::SurfaceFormatKHR& sformat : formats) {
         vk::Format format = sformat.format;
-        if (EmulatorSettings.IsNvidiaWoBgra()) {
-            // Diagnostic: prefer BGRA (the format Windows presents to the compositor by
-            // default) to route around NVIDIA 610.88 present-path issues with RGBA.
+        const bool nvidia_driver = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary;
+        if (nvidia_driver) {
+            // NVIDIA 610.88 deadlocks in the swapchain present path when the
+            // surface format is R8G8B8A8 (TDR after ~10-40 presents). BGRA, the
+            // format the Windows compositor natively uses, routes around the
+            // driver bug entirely. Force it on NVIDIA regardless of config.
             if (format != vk::Format::eB8G8R8A8Unorm) {
                 continue;
             }
