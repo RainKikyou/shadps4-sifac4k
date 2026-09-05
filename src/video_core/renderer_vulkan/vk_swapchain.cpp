@@ -175,9 +175,18 @@ void Swapchain::FindPresentFormat() {
     }
 
     // Try to find a suitable format.
+    // NVIDIA 610.88 deadlocks in the present path when the surface format is
+    // R8G8B8A8 (TDR after ~10-40 presents; D3D12Core AV in FIFO). BGRA, the
+    // format the Windows compositor natively uses, routes around the driver bug
+    // entirely, so force it on NVIDIA regardless of configuration.
+    const bool nvidia_driver = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary;
     for (const vk::SurfaceFormatKHR& sformat : formats) {
         vk::Format format = sformat.format;
-        if (format != vk::Format::eR8G8B8A8Unorm && format != vk::Format::eB8G8R8A8Unorm) {
+        if (nvidia_driver) {
+            if (format != vk::Format::eB8G8R8A8Unorm) {
+                continue;
+            }
+        } else if (format != vk::Format::eR8G8B8A8Unorm && format != vk::Format::eB8G8R8A8Unorm) {
             continue;
         }
 
@@ -199,8 +208,18 @@ void Swapchain::FindPresentMode() {
         return;
     }
 
+    // NVIDIA 610.88 (and related drivers) hangs the present path (TDR) when the
+    // swapchain uses Mailbox mode with an RGBA surface. The BGRA format covers
+    // the surface, but Mailbox itself was also implicated, so demote Mailbox to
+    // Immediate on NVIDIA unless the user explicitly requested Mailbox.
+    const bool nvidia_driver = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary;
     const auto requested_mode = EmulatorSettings.GetPresentMode();
-    if (requested_mode == "Mailbox") {
+    const bool user_requested_mailbox = requested_mode == "Mailbox";
+    if (user_requested_mailbox && nvidia_driver) {
+        LOG_INFO(Render_Vulkan,
+                 "NVIDIA driver: demoting Mailbox present mode to Immediate to avoid TDR");
+        present_mode = vk::PresentModeKHR::eImmediate;
+    } else if (user_requested_mailbox) {
         present_mode = vk::PresentModeKHR::eMailbox;
     } else if (requested_mode == "Fifo") {
         present_mode = vk::PresentModeKHR::eFifo;

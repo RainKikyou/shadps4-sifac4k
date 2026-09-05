@@ -523,6 +523,10 @@ Presenter::~Presenter() {
         device.destroyImageView(frame.image_view);
         device.destroyFence(frame.present_done);
     }
+    if (present_staging) {
+        vmaDestroyImage(instance.GetAllocator(), present_staging, present_staging_alloc);
+        present_staging = vk::Image{};
+    }
 }
 
 bool Presenter::IsVideoOutSurface(const AmdGpu::ColorBuffer& color_buffer) const {
@@ -853,6 +857,55 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
     }
 
+    // NVIDIA 610.88 deadlocks on the raw windowed (DWM-composited) present path;
+    // routing the swapchain image through a copy-out/copy-in pass fixes it. Keep
+    // the staging image in sync with the swapchain size so the copy extents always
+    // match (a stale-size staging image hangs the driver on resize/fullscreen).
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+        const auto [staging_w, staging_h] = swapchain.GetExtent();
+        if (present_staging &&
+            (present_staging_width != staging_w || present_staging_height != staging_h)) {
+            // Wait for any in-flight present copy commands to finish before
+            // destroying the stale-size staging image.
+            present_scheduler.Finish();
+            vmaDestroyImage(instance.GetAllocator(), present_staging, present_staging_alloc);
+            present_staging = vk::Image{};
+            present_staging_width = 0;
+            present_staging_height = 0;
+        }
+        if (!present_staging) {
+            const vk::Format format = swapchain.GetSurfaceFormat().format;
+            const vk::ImageCreateInfo staging_ci{
+                .imageType = vk::ImageType::e2D,
+                .format = format,
+                .extent = {staging_w, staging_h, 1},
+                .mipLevels = 1,
+                .arrayLayers = 1,
+                .samples = vk::SampleCountFlagBits::e1,
+                .usage =
+                    vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
+            };
+            VkImage unsafe_staging{};
+            VkImageCreateInfo unsafe_staging_ci = static_cast<VkImageCreateInfo>(staging_ci);
+            VmaAllocationCreateInfo alloc_info{
+                .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
+                .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            };
+            const VkResult staging_result =
+                vmaCreateImage(instance.GetAllocator(), &unsafe_staging_ci, &alloc_info,
+                               &unsafe_staging, &present_staging_alloc, nullptr);
+            if (staging_result == VK_SUCCESS) {
+                present_staging = vk::Image{unsafe_staging};
+                present_staging_width = staging_w;
+                present_staging_height = staging_h;
+                SetObjectName(instance.GetDevice(), present_staging, "Present copy staging");
+            } else {
+                LOG_ERROR(Render_Vulkan, "Failed to create present-copy staging image: {}",
+                          vk::to_string(vk::Result{staging_result}));
+            }
+        }
+    }
+
     if (!swapchain.AcquireNextImage()) {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
         if (!swapchain.AcquireNextImage()) {
@@ -1025,12 +1078,92 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
             swapchain_copied_for_screenshot = true;
         }
 
+        // NVIDIA windowed-present workaround: route the swapchain image through a
+        // copy-out/copy-in pass before present to mimic RenderDoc's capture. This
+        // forces the driver to process the image through the transfer path, which
+        // avoids the 610.88 deadlock on the raw windowed (DWM-composited) present.
+        // Forced on NVIDIA; other vendors keep the direct path.
+        const bool present_copy =
+            instance.GetDriverID() == vk::DriverId::eNvidiaProprietary && present_staging;
+        if (present_copy) {
+            const vk::ImageSubresourceLayers layers{
+                .aspectMask = vk::ImageAspectFlagBits::eColor,
+                .layerCount = 1,
+            };
+            const vk::ImageCopy region{
+                .srcSubresource = layers,
+                .srcOffset = {0, 0, 0},
+                .dstSubresource = layers,
+                .dstOffset = {0, 0, 0},
+                .extent = {extent.width, extent.height, 1},
+            };
+            const vk::ImageSubresourceRange range{
+                .aspectMask = vk::ImageAspectFlagBits::eColor,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = VK_REMAINING_ARRAY_LAYERS,
+            };
+            // swapchain image -> TransferSrc (skip if screenshot already did it).
+            if (!swapchain_copied_for_screenshot) {
+                const vk::ImageMemoryBarrier to_transfer{
+                    .srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite,
+                    .dstAccessMask = vk::AccessFlagBits::eTransferRead,
+                    .oldLayout = vk::ImageLayout::eColorAttachmentOptimal,
+                    .newLayout = vk::ImageLayout::eTransferSrcOptimal,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = swapchain_image,
+                    .subresourceRange = range,
+                };
+                cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eColorAttachmentOutput,
+                                       vk::PipelineStageFlagBits::eTransfer,
+                                       vk::DependencyFlagBits::eByRegion, {}, {}, to_transfer);
+            }
+            // Copy out: swapchain -> staging.
+            cmdbuf.copyImage(swapchain_image, vk::ImageLayout::eTransferSrcOptimal, present_staging,
+                             vk::ImageLayout::eTransferDstOptimal, {region});
+            // swapchain -> TransferDst, staging -> TransferSrc for the copy back.
+            const std::array copy_back_barriers{
+                vk::ImageMemoryBarrier{
+                    .srcAccessMask = vk::AccessFlagBits::eTransferRead,
+                    .dstAccessMask = vk::AccessFlagBits::eTransferWrite,
+                    .oldLayout = vk::ImageLayout::eTransferSrcOptimal,
+                    .newLayout = vk::ImageLayout::eTransferDstOptimal,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = swapchain_image,
+                    .subresourceRange = range,
+                },
+                vk::ImageMemoryBarrier{
+                    .srcAccessMask = vk::AccessFlagBits::eTransferWrite,
+                    .dstAccessMask = vk::AccessFlagBits::eTransferRead,
+                    .oldLayout = vk::ImageLayout::eTransferDstOptimal,
+                    .newLayout = vk::ImageLayout::eTransferSrcOptimal,
+                    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                    .image = present_staging,
+                    .subresourceRange = range,
+                },
+            };
+            cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                                   vk::PipelineStageFlagBits::eTransfer,
+                                   vk::DependencyFlagBits::eByRegion, {}, {}, copy_back_barriers);
+            // Copy in: staging -> swapchain (now TransferDst).
+            cmdbuf.copyImage(present_staging, vk::ImageLayout::eTransferSrcOptimal, swapchain_image,
+                             vk::ImageLayout::eTransferDstOptimal, {region});
+        }
+
         const vk::AccessFlags post_src_access_mask =
-            swapchain_copied_for_screenshot ? vk::AccessFlagBits::eTransferRead
-                                            : vk::AccessFlagBits::eColorAttachmentWrite;
-        const vk::ImageLayout post_old_layout = swapchain_copied_for_screenshot
-                                                    ? vk::ImageLayout::eTransferSrcOptimal
-                                                    : vk::ImageLayout::eColorAttachmentOptimal;
+            present_copy
+                ? vk::AccessFlagBits::eTransferWrite
+                : (swapchain_copied_for_screenshot ? vk::AccessFlagBits::eTransferRead
+                                                   : vk::AccessFlagBits::eColorAttachmentWrite);
+        const vk::ImageLayout post_old_layout =
+            present_copy
+                ? vk::ImageLayout::eTransferDstOptimal
+                : (swapchain_copied_for_screenshot ? vk::ImageLayout::eTransferSrcOptimal
+                                                   : vk::ImageLayout::eColorAttachmentOptimal);
         const vk::ImageMemoryBarrier post_barrier{
             .srcAccessMask = post_src_access_mask,
             .dstAccessMask = vk::AccessFlagBits::eNone,
