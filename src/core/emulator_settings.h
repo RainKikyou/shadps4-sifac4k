@@ -519,6 +519,13 @@ struct VulkanSettings {
     // the present bug, so this serialization is now optional; keep the toggle in
     // case a driver build still needs it (CUSA15006.json can flip it).
     Setting<bool> nvidia_wo_submit_waitidle{false};
+    // NVIDIA 610.88 rejects Mailbox (TDR) and Fifo (D3D12Core AV), so the
+    // swapchain must run Immediate, which is unpaced. Without pacing the guest
+    // frame/EOP flow is irregular and the CUSA15006 BGM sequencer re-queues the
+    // same cue in a loop. This enables a software present pacing at the
+    // configured vblank frequency in Presenter::Present to restore a regular
+    // cadence. Disable if a title prefers uncapped frames.
+    Setting<bool> nvidia_wo_frame_pacer{true};
     std::vector<OverrideItem> GetOverrideableFields() const {
         return std::vector<OverrideItem>{
             make_override<VulkanSettings>("gpu_id", &VulkanSettings::gpu_id),
@@ -550,6 +557,8 @@ struct VulkanSettings {
             make_override<VulkanSettings>("nvidia_wo_bgra", &VulkanSettings::nvidia_wo_bgra),
             make_override<VulkanSettings>("nvidia_wo_submit_waitidle",
                                           &VulkanSettings::nvidia_wo_submit_waitidle),
+            make_override<VulkanSettings>("nvidia_wo_frame_pacer",
+                                          &VulkanSettings::nvidia_wo_frame_pacer),
         };
     }
 };
@@ -560,7 +569,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VulkanSettings, gpu_id, renderdoc_enabled, vk
                                    pipeline_cache_archived, nvidia_wo_disable_optimization,
                                    nvidia_wo_push_descriptors, nvidia_wo_min_images,
                                    nvidia_wo_present_copy, nvidia_wo_bgra,
-                                   nvidia_wo_submit_waitidle)
+                                   nvidia_wo_submit_waitidle, nvidia_wo_frame_pacer)
 
 // -------------------------------
 // Main manager
@@ -847,6 +856,7 @@ public:
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoPresentCopy, nvidia_wo_present_copy)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoBgra, nvidia_wo_bgra)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoSubmitWaitidle, nvidia_wo_submit_waitidle)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoFramePacer, nvidia_wo_frame_pacer)
 
 #undef SETTING_FORWARD
 #undef SETTING_FORWARD_BOOL

@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
+#include <thread>
 
 #include "core/libraries/videoout/buffer.h"
 #include "imgui/imgui_texture.h"
@@ -107,6 +109,13 @@ private:
 
     void SetExpectedGameSize(s32 width, s32 height);
 
+    /// Cap the present rate to the configured vblank frequency on NVIDIA. The
+    /// driver rejects Mailbox/Fifo (TDR / D3D12Core AV), so the swapchain runs
+    /// Immediate (unpaced); without pacing the guest frame/EOP flow is irregular
+    /// and the BGM sequencer of CUSA15006 keeps re-queuing the same cue. A
+    /// software pace in Present() restores a regular ~60Hz cadence.
+    void PacePresentToVblank();
+
 private:
     float expected_ratio{1920.0 / 1080.0f};
     u32 expected_frame_width{1920};
@@ -143,6 +152,9 @@ private:
     VmaAllocation present_staging_alloc{};
     u32 present_staging_width{};
     u32 present_staging_height{};
+
+    // Software present pacing state (see PacePresentToVblank).
+    std::chrono::steady_clock::time_point next_present_time{};
 };
 
 } // namespace Vulkan

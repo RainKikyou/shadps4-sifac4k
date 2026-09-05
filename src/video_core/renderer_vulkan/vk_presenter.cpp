@@ -41,6 +41,7 @@
 #include <span>
 #include <sstream>
 #include <system_error>
+#include <thread>
 #include <vector>
 #include <imgui.h>
 #include <stb_image_write.h>
@@ -837,6 +838,15 @@ Frame* Presenter::PrepareBlankFrame(bool present_thread) {
 }
 
 void Presenter::Present(Frame* frame, bool is_reusing_frame) {
+    // Software pacing on NVIDIA (see PacePresentToVblank): Mailbox and Fifo are
+    // both unusable on driver 610.88, so Immediate is required; without a paced
+    // present cadence the game's frame/EOP flow goes irregular and the BGM
+    // sequencer (CUSA15006) re-queues the same cue in a loop.
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary &&
+        EmulatorSettings.IsNvidiaWoFramePacer()) {
+        PacePresentToVblank();
+    }
+
     // Free the frame for reuse
     const auto free_frame = [&] {
         if (!is_reusing_frame) {
@@ -1265,6 +1275,29 @@ void Presenter::SetExpectedGameSize(s32 width, s32 height) {
         expected_frame_width = static_cast<s32>(height * expected_ratio);
     } else {
         expected_frame_height = static_cast<s32>(width / expected_ratio);
+    }
+}
+
+void Presenter::PacePresentToVblank() {
+    const auto pace = std::chrono::nanoseconds(1000000000ULL /
+                                               std::max(EmulatorSettings.GetVblankFrequency(), 1u));
+    const auto now = std::chrono::steady_clock::now();
+
+    if (next_present_time.time_since_epoch().count() == 0) {
+        // First present: establish the cadence baseline.
+        next_present_time = now + pace;
+        return;
+    }
+
+    if (now < next_present_time) {
+        // Ahead of schedule: sleep until the next vblank slot so the guest
+        // flip/EOP flow lands at a regular 60Hz cadence.
+        std::this_thread::sleep_until(next_present_time);
+        next_present_time += pace;
+    } else {
+        // Behind (GPU can't keep up): don't sleep; resync so we never accumulate
+        // latency and the frame rate degrades gracefully.
+        next_present_time = now + pace;
     }
 }
 
