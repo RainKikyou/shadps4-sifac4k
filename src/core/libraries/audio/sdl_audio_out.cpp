@@ -96,6 +96,13 @@ public:
             LOG_DEBUG(Lib_AudioOut, "Audio queue heartbeat: {} bytes queued", queued);
         }
 
+        // Diagnostic: PCM repetition detector. While the guest produces normal
+        // (advancing) audio this stays silent; it logs only when the exact same
+        // buffer content is fed repeatedly (~640ms+ of identical PCM), which is
+        // the literal form of "one BGM keeps repeating" when it comes from stale
+        // or stalled producers.
+        CheckForRepeatedPcm(ptr);
+
         if (!SDL_PutAudioStreamData(stream, internal_buffer, internal_buffer_size)) [[unlikely]] {
             LOG_ERROR(Lib_AudioOut, "Failed to output to SDL audio stream: {}", SDL_GetError());
         }
@@ -250,6 +257,36 @@ private:
         } else {
             // Slightly behind or on time - just advance
             next_output_time += period_us;
+        }
+    }
+
+    // Digest over the first 8 bytes of the guest output buffer: enough to fingerprint
+    // a 256-frame PCM block without hashing the whole thing every 5ms.
+    void CheckForRepeatedPcm(const void* ptr) {
+        const auto* bytes = static_cast<const u8*>(ptr);
+        u32 digest = 2166136261u;
+        for (u32 i = 0; i < 8; i++) {
+            digest = (digest ^ bytes[i]) * 16777619u;
+        }
+        if (digest == pcm_last_digest) {
+            if (++pcm_identical_streak == 120) {
+                LOG_INFO(Lib_AudioOut,
+                         "Audio output feeding identical PCM buffer (digest {:#010x}) for ~640ms; "
+                         "{}ch port - possible BGM loop source",
+                         digest, num_channels);
+            } else if (pcm_identical_streak > 120 && (pcm_identical_streak % 600) == 0) {
+                LOG_INFO(Lib_AudioOut,
+                         "Audio output STILL feeding identical PCM (digest {:#010x}), ~{}s so far",
+                         digest, pcm_identical_streak * 256 / 48000);
+            }
+        } else {
+            if (pcm_identical_streak >= 120) {
+                LOG_INFO(Lib_AudioOut,
+                         "Audio output recovered from identical-PCM streak after {} outputs",
+                         pcm_identical_streak);
+            }
+            pcm_identical_streak = 0;
+            pcm_last_digest = digest;
         }
     }
 
@@ -674,6 +711,9 @@ private:
     // Channel count of the SDL stream feeding the device; equals num_channels
     // unless the PS4-accurate downmix is active (always 2 then).
     u32 stream_channels{0};
+    // Diagnostic state for the PCM repetition detector.
+    u32 pcm_last_digest{0};
+    u32 pcm_identical_streak{0};
     const std::array<int, 8> channel_layout;
 
     alignas(64) u64 period_us{0};
