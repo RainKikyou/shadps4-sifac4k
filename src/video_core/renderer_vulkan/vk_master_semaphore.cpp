@@ -8,7 +8,7 @@
 
 namespace Vulkan {
 
-constexpr u64 WAIT_TIMEOUT_NS = 500ULL * 1000ULL * 1000ULL;
+constexpr u64 WAIT_TIMEOUT = std::numeric_limits<u64>::max();
 
 MasterSemaphore::MasterSemaphore(const Instance& instance_) : instance{instance_} {
     const vk::StructureChain semaphore_chain = {
@@ -61,12 +61,12 @@ void MasterSemaphore::Wait(u64 tick) {
         .pValues = &tick,
     };
 
-    while (instance.GetDevice().waitSemaphores(&wait_info, WAIT_TIMEOUT_NS) !=
-           vk::Result::eSuccess) {
-        Refresh();
-        if (IsFree(tick)) {
-            break;
-        }
+    // Block until the GPU reaches the tick. NOTE: this matches upstream mainline
+    // exactly. The fork previously polled with a 500ms timeout + Refresh/IsFree
+    // loop (to let driver timeouts recover), but that injects 0-500ms of latency
+    // jitter into every scheduler wait; the guest engine heartbeat that drives
+    // the BGM sequencer (CUSA15006 "one song repeats" loop) is sensitive to it.
+    while (instance.GetDevice().waitSemaphores(&wait_info, WAIT_TIMEOUT) != vk::Result::eSuccess) {
     }
     Refresh();
 }
