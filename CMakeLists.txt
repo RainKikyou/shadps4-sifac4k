@@ -623,6 +623,7 @@ set(VDEC_LIB src/core/libraries/videodec/video_utils.cpp
              src/core/libraries/videodec/videodec2_impl.h
              src/core/libraries/videodec/videodec2.cpp
              src/core/libraries/videodec/videodec2.h
+             src/core/libraries/videodec/videodec2_avc.h
              src/core/libraries/videodec/videodec.cpp
              src/core/libraries/videodec/videodec.h
              src/core/libraries/videodec/videodec_error.h
@@ -693,9 +694,6 @@ set(NP_LIBS src/core/libraries/np/np_error.h
             src/core/libraries/np/np_tus/np_tus.cpp
             src/core/libraries/np/np_tus/np_tus.h
             src/core/libraries/np/np_tus/np_tus_ctx.h
-            src/core/libraries/np/np_utility/np_utility.cpp
-            src/core/libraries/np/np_utility/np_utility.h
-            src/core/libraries/np/np_utility/np_utility_ctx.h
 )
 
 set(ZLIB_LIB src/core/libraries/zlib/zlib.cpp
@@ -1028,9 +1026,7 @@ set(SHADER_RECOMPILER src/shader_recompiler/profile.h
                       src/shader_recompiler/ir/passes/lower_fp64_to_fp32.cpp
                       src/shader_recompiler/ir/passes/lower_user_clip_planes.cpp
                       src/shader_recompiler/ir/passes/readlane_elimination_pass.cpp
-                      src/shader_recompiler/ir/passes/resource_discover_pass.cpp
-                      src/shader_recompiler/ir/passes/resource_pass.h
-                      src/shader_recompiler/ir/passes/resource_patching_pass.cpp
+                      src/shader_recompiler/ir/passes/resource_tracking_pass.cpp
                       src/shader_recompiler/ir/passes/ring_access_elimination.cpp
                       src/shader_recompiler/ir/passes/shader_info_collection_pass.cpp
                       src/shader_recompiler/ir/passes/shared_memory_barrier_pass.cpp

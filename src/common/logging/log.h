@@ -53,8 +53,7 @@ static constexpr std::array level_string_views{"Trace", "Debug",    "Info", "War
 // Define the fmt lib macros
 #define LOG_GENERIC(log_class, log_level, format, ...)                                             \
     do {                                                                                           \
-        if (auto logger = Common::Log::ALL_LOGGERS[log_class];                                     \
-            logger && logger->should_log(log_level)) {                                             \
+        if (auto logger = Common::Log::ALL_LOGGERS[log_class]) {                                   \
             logger->log(log_level, "[{}] <{}> ({}) {}:{} {}: " format, log_class,                  \
                         Common::Log::to_string_view(log_level), Common::GetCurrentThreadName(),    \
                         spdlog::source_loc::basename(__FILE__), __LINE__,                          \

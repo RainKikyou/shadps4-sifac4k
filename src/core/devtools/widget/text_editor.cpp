@@ -1047,24 +1047,16 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder) {
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           ImGui::ColorConvertU32ToFloat4(mPalette[(int)PaletteIndex::Background]));
-
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
-
-    if (!mIgnoreImGuiChild) {
-        ImGuiChildFlags child_flags = 0;
-
-        if (aBorder)
-            child_flags |= ImGuiChildFlags_Borders;
-
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_HorizontalScrollbar |
-                                        ImGuiWindowFlags_AlwaysHorizontalScrollbar |
-                                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav;
-
-        ImGui::BeginChild(aTitle, aSize, child_flags, window_flags);
-    }
+    if (!mIgnoreImGuiChild)
+        ImGui::BeginChild(aTitle, aSize, aBorder,
+                          ImGuiWindowFlags_HorizontalScrollbar |
+                              ImGuiWindowFlags_AlwaysHorizontalScrollbar | ImGuiWindowFlags_NoMove |
+                              ImGuiWindowFlags_NoNav);
 
     if (mHandleKeyboardInputs) {
         HandleKeyboardInputs();
+        ImGui::PushAllowKeyboardFocus(true);
     }
 
     if (mHandleMouseInputs)
@@ -1073,7 +1065,8 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder) {
     ColorizeInternal();
     Render();
 
-    // PopAllowKeyboardFocus() removed.
+    if (mHandleKeyboardInputs)
+        ImGui::PopAllowKeyboardFocus();
 
     if (!mIgnoreImGuiChild)
         ImGui::EndChild();

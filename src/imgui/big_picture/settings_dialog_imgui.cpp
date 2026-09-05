@@ -319,13 +319,11 @@ void SettingsWindow::DrawCategoryTabs() {
 
     float vertSize = (settingsIconSize * uiScale + ImGui::CalcTextSize("Profiles").y) +
                      ImGui::GetStyle().FramePadding.y * 4.f + 20.0 * uiScale;
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened;
-
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-
-    ImGui::BeginChild("Categories", ImVec2(0, vertSize), child_flags, window_flags);
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NavFlattened;
+    ImGui::BeginChild("Categories", ImVec2(0, vertSize), true,
+                      child_flags | ImGuiWindowFlags_HorizontalScrollbar |
+                          ImGuiWindowFlags_NoScrollWithMouse);
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(30.0f * uiScale, 0.0f));
 
@@ -388,6 +386,8 @@ void SettingsWindow::AddCategory(std::string name,
 void SettingsWindow::DrawMainContent(bool* open, const std::function<void()>& applySettings) {
     ImVec4 settingsColor = ImVec4(0.1f, 0.1f, 0.12f, 0.8f); // Darker gray
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settingsColor);
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NavFlattened;
 
     std::string centeredText;
     currentCategory == SettingsCategory::Folders
@@ -478,20 +478,16 @@ void SettingsWindow::DrawMainContent(bool* open, const std::function<void()>& ap
 }
 
 void SettingsWindow::DrawProfileSelector() {
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened;
-
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NavFlattened;
     ImVec4 settingsColor = ImVec4(0.1f, 0.1f, 0.12f, 0.8f); // Darker gray
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settingsColor);
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
 
-    ImGui::BeginChild("Profile Selection", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()),
-                      child_flags, window_flags);
-
+    ImGui::BeginChild("Profile Selection", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true,
+                      child_flags);
     ImGui::PopStyleColor();
 
     if (ImGui::BeginTable("ProfilesTable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders)) {
@@ -586,13 +582,10 @@ void SettingsWindow::DrawProfileSelector() {
 }
 
 void SettingsWindow::DrawGameFolderManager() {
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened;
-
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-
-    ImGui::BeginChild("ContentRegion", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), child_flags,
-                      window_flags);
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NavFlattened;
+    ImGui::BeginChild("ContentRegion", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true,
+                      child_flags);
 
     if (ImGui::Button("Add Folder", ImVec2(400.f * uiScale, 0))) {
         ImGuiFileDialog::Instance()->OpenDialog("OpenFolder", "Add shadPS4 game folder", nullptr,
@@ -672,13 +665,11 @@ void SettingsWindow::DrawGameFolderManager() {
 
 void SettingsWindow::DrawSettingsTable(SettingsCategory category) {
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f * uiScale, 10.0f * uiScale));
-    ImGuiChildFlags child_flags = ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened;
+    ImGuiWindowFlags child_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NavFlattened;
 
-    ImGuiWindowFlags window_flags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-
-    ImGui::BeginChild("ContentRegion", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), child_flags,
-                      window_flags);
+    ImGui::BeginChild("ContentRegion", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), true,
+                      child_flags);
 
     if (category == SettingsCategory::General) {
         if (ImGui::BeginTable("SettingsTable", 2)) {
