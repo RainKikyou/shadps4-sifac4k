@@ -298,9 +298,11 @@ private:
         }
 
         SDL_AudioSpec dev_spec{};
-        if (num_channels >= 6 &&
+        const bool stereo_device =
+            num_channels >= 6 &&
             SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream), &dev_spec, nullptr) &&
-            dev_spec.channels >= 1 && dev_spec.channels <= 2) {
+            dev_spec.channels >= 1 && dev_spec.channels <= 2;
+        if (stereo_device && EmulatorSettings.IsAudioPs4Downmix()) {
             ps4_downmix = true;
             // The PS4-accurate downmix folds the guest 5.1/7.1 bus into stereo on
             // the host, so the stream now consumes 2ch data while the guest port
@@ -323,6 +325,16 @@ private:
                 LOG_ERROR(Lib_AudioOut, "Failed to recreate SDL audio stream: {}", SDL_GetError());
                 return false;
             }
+        } else if (stereo_device) {
+            // Keep the native 8ch stream and let SDL3's AudioStream resample the
+            // guest 5.1/7.1 bus down to the stereo device. This is the same code
+            // path the working baseline uses on an 8ch-capable device, minus the
+            // custom folding; avoids the stream-recreation dance implicated in
+            // "one BGM keeps repeating" on stereo hosts.
+            LOG_INFO(Lib_AudioOut,
+                     "Stereo device '{}': keeping {}ch stream, SDL converts to {}ch (PS4-accurate "
+                     "downmix disabled)",
+                     device_name, num_channels, dev_spec.channels);
         }
 
         // Configure channel mapping (input is already stereo when folding)

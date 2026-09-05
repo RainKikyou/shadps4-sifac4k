@@ -372,6 +372,14 @@ struct AudioSettings {
     Setting<std::string> openal_padSpk_output_device{"Default Device"};
     Setting<u32> openal_hrtf{OpenALHrtfMode::HrtfAuto};
     Setting<u32> openal_output_mode{OpenALOutputMode::OutputAuto};
+    // When the host device is stereo, shadPS4 can fold the guest 5.1/7.1 bus
+    // itself ("PS4-accurate" downmix, recreating the SDL stream as stereo), or
+    // keep the native 8ch stream and let SDL3 perform the 8ch->2ch conversion.
+    // The PS4-accurate path was implicated in CUSA15006's "one BGM repeats"
+    // when running on stereo devices (the working baseline ran on an 8ch
+    // device and never entered it), so SDL-native conversion is now the
+    // default; per-title opt-out remains possible.
+    Setting<bool> audio_ps4_downmix{false};
 
     std::vector<OverrideItem> GetOverrideableFields() const {
         return std::vector<OverrideItem>{
@@ -387,14 +395,16 @@ struct AudioSettings {
             make_override<AudioSettings>("openal_padSpk_output_device",
                                          &AudioSettings::openal_padSpk_output_device),
             make_override<AudioSettings>("openal_hrtf", &AudioSettings::openal_hrtf),
-            make_override<AudioSettings>("openal_output_mode", &AudioSettings::openal_output_mode)};
+            make_override<AudioSettings>("openal_output_mode", &AudioSettings::openal_output_mode),
+            make_override<AudioSettings>("audio_ps4_downmix", &AudioSettings::audio_ps4_downmix)};
     }
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AudioSettings, audio_backend, sdl_mic_device,
                                    sdl_main_output_device, sdl_padSpk_output_device,
                                    openal_mic_device, openal_main_output_device,
-                                   openal_padSpk_output_device, openal_hrtf, openal_output_mode)
+                                   openal_padSpk_output_device, openal_hrtf, openal_output_mode,
+                                   audio_ps4_downmix)
 
 // Windows static guest red-zone protection
 struct WindowsGuestRedZoneProtectionSettings {
@@ -757,6 +767,7 @@ public:
     SETTING_FORWARD(m_audio, OpenALPadSpkOutputDevice, openal_padSpk_output_device)
     SETTING_FORWARD(m_audio, OpenALHrtf, openal_hrtf)
     SETTING_FORWARD(m_audio, OpenALOutputMode, openal_output_mode)
+    SETTING_FORWARD_BOOL(m_audio, AudioPs4Downmix, audio_ps4_downmix)
 
     // Windows static guest red-zone protection
     SETTING_FORWARD(m_windows_guest_red_zone_protection, WindowsGuestRedZoneProtectionMode,
