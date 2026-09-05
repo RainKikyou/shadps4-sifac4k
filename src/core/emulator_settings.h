@@ -472,7 +472,10 @@ struct VulkanSettings {
     Setting<s32> gpu_id{-1};
     Setting<bool> renderdoc_enabled{false};
     Setting<bool> vkvalidation_enabled{false};
-    Setting<bool> vkvalidation_core_enabled{true};
+    // Core validation (VK_LAYER_KHRONOS_validation "validate_core") is disabled
+    // by default: on NVIDIA drivers it turns heavy shader compilation (e.g. the
+    // detiler pass of CUSA15006) into a GPU hang / TDR. Users can still opt in.
+    Setting<bool> vkvalidation_core_enabled{false};
     Setting<bool> vkvalidation_sync_enabled{false};
     Setting<bool> vkvalidation_gpu_enabled{false};
     Setting<bool> vkcrash_diagnostic_enabled{false};

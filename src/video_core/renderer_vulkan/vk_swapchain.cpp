@@ -208,8 +208,19 @@ void Swapchain::FindPresentMode() {
         return;
     }
 
+    // NVIDIA 610.88 (and related drivers) can hang the present path (TDR) when
+    // the swapchain uses Mailbox mode with an RGBA surface. The BGRA format
+    // workaround covers the surface, but Mailbox was also implicated in early
+    // TDRs on this driver, so demote Mailbox to Immediate on NVIDIA unless the
+    // user explicitly requested Mailbox.
+    const bool nvidia_driver = instance.GetDriverID() == vk::DriverId::eNvidiaProprietary;
     const auto requested_mode = EmulatorSettings.GetPresentMode();
-    if (requested_mode == "Mailbox") {
+    const bool user_requested_mailbox = requested_mode == "Mailbox";
+    if (user_requested_mailbox && nvidia_driver) {
+        LOG_INFO(Render_Vulkan,
+                 "NVIDIA driver: demoting Mailbox present mode to Immediate to avoid TDR");
+        present_mode = vk::PresentModeKHR::eImmediate;
+    } else if (user_requested_mailbox) {
         present_mode = vk::PresentModeKHR::eMailbox;
     } else if (requested_mode == "Fifo") {
         present_mode = vk::PresentModeKHR::eFifo;
