@@ -293,8 +293,17 @@ vk::UniqueInstance CreateInstance(Frontend::WindowSystemType window_type, bool e
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
         .pEngineName = "shadPS4 Vulkan",
         .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = available_version,
+        // Request exactly the target version instead of the driver's maximum:
+        // the high-version driver paths expose bugs on NVIDIA 610.88 (TDR in the
+        // swapchain/present stack). Aligning with the target (1.3) keeps the
+        // feature surface that is known to work.
+        .apiVersion = TargetVulkanApiVersion,
     };
+
+    LOG_INFO(Render_Vulkan, "CreateInstance: requesting apiVersion {}.{}.{} (driver max {}.{}.{})",
+             VK_VERSION_MAJOR(TargetVulkanApiVersion), VK_VERSION_MINOR(TargetVulkanApiVersion),
+             VK_VERSION_PATCH(TargetVulkanApiVersion), VK_VERSION_MAJOR(available_version),
+             VK_VERSION_MINOR(available_version), VK_VERSION_PATCH(available_version));
 
     const std::string extensions_string = fmt::format("{}", fmt::join(extensions, ", "));
     const std::string layers_string = fmt::format("{}", fmt::join(layers, ", "));
