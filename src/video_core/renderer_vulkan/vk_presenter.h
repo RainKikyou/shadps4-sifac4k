@@ -137,9 +137,12 @@ private:
 
     // NVIDIA 610.88 windowed-present workaround: staging image used to route the
     // swapchain image through a copy-out/copy-in pass before present (mimics
-    // RenderDoc's capture) when nvidia_wo_present_copy is enabled.
+    // RenderDoc's capture) when nvidia_wo_present_copy is enabled. Tracks its
+    // own size so it can be recreated on window resize.
     vk::Image present_staging{};
     VmaAllocation present_staging_alloc{};
+    u32 present_staging_width{};
+    u32 present_staging_height{};
 };
 
 } // namespace Vulkan

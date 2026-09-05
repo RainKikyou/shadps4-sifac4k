@@ -580,34 +580,6 @@ void Presenter::RecreateFrame(Frame* frame, u32 width, u32 height) {
     frame->image = vk::Image{unsafe_image};
     SetObjectName(device, frame->image, "Frame image #{}", frame->id);
 
-    // Create the NVIDIA present-copy staging image (lazy, once per size).
-    // NVIDIA 610.88 deadlocks on the raw windowed (DWM-composited) present path;
-    // routing the swapchain image through a transfer copy fixes it. Force on
-    // NVIDIA regardless of config to avoid the config default not being applied.
-    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary && !present_staging) {
-        const vk::ImageCreateInfo staging_ci{
-            .imageType = vk::ImageType::e2D,
-            .format = format,
-            .extent = {width, height, 1},
-            .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = vk::SampleCountFlagBits::e1,
-            .usage = vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
-        };
-        VkImage unsafe_staging{};
-        VkImageCreateInfo unsafe_staging_ci = static_cast<VkImageCreateInfo>(staging_ci);
-        const VkResult staging_result =
-            vmaCreateImage(instance.GetAllocator(), &unsafe_staging_ci, &alloc_info,
-                           &unsafe_staging, &present_staging_alloc, nullptr);
-        if (staging_result == VK_SUCCESS) {
-            present_staging = vk::Image{unsafe_staging};
-            SetObjectName(device, present_staging, "Present copy staging");
-        } else {
-            LOG_ERROR(Render_Vulkan, "Failed to create present-copy staging image: {}",
-                      vk::to_string(vk::Result{staging_result}));
-        }
-    }
-
     const vk::ImageViewCreateInfo view_info = {
         .image = frame->image,
         .viewType = vk::ImageViewType::e2D,
@@ -878,6 +850,55 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
     // Recreate the swapchain if the window was resized.
     if (window.GetWidth() != swapchain.GetWidth() || window.GetHeight() != swapchain.GetHeight()) {
         swapchain.Recreate(window.GetWidth(), window.GetHeight());
+    }
+
+    // NVIDIA 610.88 deadlocks on the raw windowed (DWM-composited) present path;
+    // routing the swapchain image through a copy-out/copy-in pass fixes it. Keep
+    // the staging image in sync with the swapchain size so the copy extents always
+    // match (a stale-size staging image hangs the driver on resize/fullscreen).
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+        const auto [staging_w, staging_h] = swapchain.GetExtent();
+        if (present_staging &&
+            (present_staging_width != staging_w || present_staging_height != staging_h)) {
+            // Wait for any in-flight present copy commands to finish before
+            // destroying the stale-size staging image.
+            present_scheduler.Finish();
+            vmaDestroyImage(instance.GetAllocator(), present_staging, present_staging_alloc);
+            present_staging = vk::Image{};
+            present_staging_width = 0;
+            present_staging_height = 0;
+        }
+        if (!present_staging) {
+            const vk::Format format = swapchain.GetSurfaceFormat().format;
+            const vk::ImageCreateInfo staging_ci{
+                .imageType = vk::ImageType::e2D,
+                .format = format,
+                .extent = {staging_w, staging_h, 1},
+                .mipLevels = 1,
+                .arrayLayers = 1,
+                .samples = vk::SampleCountFlagBits::e1,
+                .usage =
+                    vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
+            };
+            VkImage unsafe_staging{};
+            VkImageCreateInfo unsafe_staging_ci = static_cast<VkImageCreateInfo>(staging_ci);
+            VmaAllocationCreateInfo alloc_info{
+                .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
+                .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+            };
+            const VkResult staging_result =
+                vmaCreateImage(instance.GetAllocator(), &unsafe_staging_ci, &alloc_info,
+                               &unsafe_staging, &present_staging_alloc, nullptr);
+            if (staging_result == VK_SUCCESS) {
+                present_staging = vk::Image{unsafe_staging};
+                present_staging_width = staging_w;
+                present_staging_height = staging_h;
+                SetObjectName(instance.GetDevice(), present_staging, "Present copy staging");
+            } else {
+                LOG_ERROR(Render_Vulkan, "Failed to create present-copy staging image: {}",
+                          vk::to_string(vk::Result{staging_result}));
+            }
+        }
     }
 
     if (!swapchain.AcquireNextImage()) {
