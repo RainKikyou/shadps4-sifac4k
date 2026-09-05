@@ -420,8 +420,10 @@ public:
 
     /// Returns whether VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT is supported on 3D images
     bool Is2dViewOf3dSupported() const {
-        return image_2d_view_of_3d && image_2d_view_of_3d_features.image2DViewOf3D &&
-               image_2d_view_of_3d_features.sampler2DViewOf3D;
+        // Disabled: NVIDIA drivers can hard-lock the GPU (TDR) when volume images are created
+        // with VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT. AMD and RenderDoc environments
+        // either tolerate it or report the feature unavailable.
+        return false;
     }
 
     /// Returns whether VK_EXT_image_view_min_lod is supported.
