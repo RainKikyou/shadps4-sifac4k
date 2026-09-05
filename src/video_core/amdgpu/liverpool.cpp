@@ -893,17 +893,17 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 // there are no other submits to yield to we can sleep the thread
                 // instead and allow other tasks to run.
                 const u64* wait_addr = wait_reg_mem->Address<u64*>();
-                const bool is_mem_space =
-                    wait_reg_mem->mem_space.Value() == PM4CmdWaitRegMem::MemSpace::Memory;
-                const auto func = wait_reg_mem->function.Value();
-                const u32 ref_val = wait_reg_mem->ref;
-                const u32 mask_val = wait_reg_mem->mask;
                 if (vo_port->IsVoLabel(wait_addr) &&
                     num_submits == mapped_queues[GfxQueueId].submits.size()) {
-                    // Do not call WaitVoLabel here — it blocks the thread on a condition
-                    // variable, preventing ProcessCommands() from running and processing
-                    // flip commands in command_queue. Fall through to the YIELD_GFX path
-                    // which uses co_yield to suspend the coroutine instead.
+                    // Mainline behavior: sleep the GPU command thread until the
+                    // display presents and writes the VO label. This keeps the
+                    // EOP/event stream ordered the way the guest expects. The
+                    // fork previously fell through to the co_yield poll loop,
+                    // letting the command thread race ahead of the label so EOP
+                    // interrupts fired early -> the guest engine heartbeat (and
+                    // with it CUSA15006's BGM sequencer) misfired.
+                    vo_port->WaitVoLabel([&] { return wait_reg_mem->Test(regs.reg_array); });
+                    break;
                 }
                 while (!wait_reg_mem->Test(regs.reg_array)) {
                     ProcessCommands();
