@@ -19,6 +19,8 @@
 
 namespace VideoCore {
 
+using RegionWords = std::array<u16, NUM_PAGES_PER_REGION>;
+
 #ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
 using LockType = Common::AdaptiveMutex;
 #else
@@ -46,6 +48,10 @@ public:
 
     VAddr GetCpuAddr() const {
         return cpu_addr;
+    }
+
+    u16& NumFlushes(u32 page) {
+        return flushes[page];
     }
 
     static constexpr size_t SanitizeAddress(size_t address) {
@@ -95,8 +101,15 @@ public:
         }
         if constexpr (type == Type::CPU) {
             UpdateProtection<!enable, false>();
-        } else if (EmulatorSettings.GetReadbacksMode() == GpuReadbacksMode::Precise) {
-            UpdateProtection<enable, true>();
+        } else if (EmulatorSettings.GetReadbacksMode() != GpuReadbacksMode::Disabled) {
+            if (EmulatorSettings.GetReadbacksMode() != GpuReadbacksMode::Relaxed) {
+                UpdateProtection<enable, true>();
+            }
+            if (EmulatorSettings.GetReadbacksMode() != GpuReadbacksMode::Precise) {
+                for (size_t page = start_page; page != end_page && !enable; ++page) {
+                    ++flushes[page];
+                }
+            }
         }
     }
 
@@ -153,7 +166,8 @@ public:
         }
 
         const RegionBits& bits = GetRegionBits<type>();
-        return bits.AnyInRange(start_page, end_page);
+        RegionBits test(bits, start_page, end_page);
+        return test.Any();
     }
 
     LockType lock;
@@ -189,6 +203,7 @@ private:
     RegionBits gpu;
     RegionBits writeable;
     RegionBits readable;
+    RegionWords flushes{};
 };
 
 } // namespace VideoCore
