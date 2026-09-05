@@ -117,31 +117,16 @@ void AjmInstance::ExecuteJob(AjmJob& job) {
                 m_gapless.Reset();
                 m_total_samples = 0;
             }
-            // In MultipleFrames mode, exhausting input or output space after
-            // at least one successful decode is a normal termination, not an
-            // error. Reporting PARTIAL_INPUT / NOT_ENOUGH_ROOM in that case
-            // causes the game to discard already-produced PCM and resubmit
-            // the same batch indefinitely (observed as BGM silence + S4U Live
-            // freeze). Only flag these conditions when no frame has been
-            // decoded yet in this job, i.e. the very first iteration.
-            if (frames_decoded == 0) {
-                if (!HasEnoughSpace(out_buf)) {
-                    LOG_TRACE(Lib_Ajm, "ORBIS_AJM_RESULT_NOT_ENOUGH_ROOM ({} < {})", out_buf.Size(),
-                              m_codec->GetNextFrameSize(m_gapless));
-                    job.output.p_result->result |= ORBIS_AJM_RESULT_NOT_ENOUGH_ROOM;
-                }
-                if (in_buf.size() < m_codec->GetMinimumInputSize()) {
-                    job.output.p_result->result |= ORBIS_AJM_RESULT_PARTIAL_INPUT;
-                }
-                if (job.output.p_result->result != 0) {
-                    break;
-                }
-            } else {
-                // At least one frame decoded: stop on exhausted input/output
-                // without setting error bits.
-                if (!HasEnoughSpace(out_buf) || in_buf.size() < m_codec->GetMinimumInputSize()) {
-                    break;
-                }
+            if (!HasEnoughSpace(out_buf)) {
+                LOG_TRACE(Lib_Ajm, "ORBIS_AJM_RESULT_NOT_ENOUGH_ROOM ({} < {})", out_buf.Size(),
+                          m_codec->GetNextFrameSize(m_gapless));
+                job.output.p_result->result |= ORBIS_AJM_RESULT_NOT_ENOUGH_ROOM;
+            }
+            if (in_buf.size() < m_codec->GetMinimumInputSize()) {
+                job.output.p_result->result |= ORBIS_AJM_RESULT_PARTIAL_INPUT;
+            }
+            if (job.output.p_result->result != 0) {
+                break;
             }
             const auto result = m_codec->ProcessData(in_buf, out_buf, m_gapless);
             if (result.is_reset) {

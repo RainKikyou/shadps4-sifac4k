@@ -62,11 +62,6 @@ s32 AjmContext::ModuleRegister(AjmCodecType type) {
 
 void AjmContext::WorkerThread(std::stop_token stop) {
     Common::SetCurrentThreadName("shadPS4:AjmWorker");
-    // AT9 decode latency directly gates sceAjmBatchWait, which the game
-    // calls on its main thread. Without elevated priority the single
-    // worker gets starved during shader compilation / resource loading
-    // bursts, delaying batch completion and stalling the game main thread.
-    Common::SetCurrentThreadPriority(Common::ThreadPriority::VeryHigh);
     while (!stop.stop_requested()) {
         auto batch = batch_queue.PopWait(stop);
         if (batch != nullptr && !batch->canceled) {
@@ -97,22 +92,11 @@ void AjmContext::ProcessBatch(u32 id, std::span<AjmJob> jobs) {
 
             instance->ExecuteJob(job);
         }
-
-        // Log non-zero job results to surface silent AT9 decode issues
-        // (PARTIAL_INPUT, NOT_ENOUGH_ROOM, CODEC_ERROR, etc.) that may cause
-        // the game to retry instances or produce audio gaps.
-        if (job.output.p_result != nullptr && job.output.p_result->result != 0) {
-            LOG_WARNING(Lib_Ajm,
-                        "Batch {} job for instance {} returned result = {:#x}, internal = {:#x}",
-                        id, job.instance_id, job.output.p_result->result,
-                        job.output.p_result->internal_result);
-        }
     }
 }
 
 s32 AjmContext::BatchWait(const u32 batch_id, const u32 timeout, AjmBatchError* const batch_error) {
     std::shared_ptr<AjmBatch> batch{};
-    s32 wait_result = ORBIS_OK;
     {
         std::shared_lock guard(batches_mutex);
         const auto p_batch = batches.Get(batch_id);
@@ -122,73 +106,28 @@ s32 AjmContext::BatchWait(const u32 batch_id, const u32 timeout, AjmBatchError* 
         batch = *p_batch;
     }
 
-    // If a previous wait already consumed this batch, return the saved result.
-    // Game code (e.g. nusc in S4U Live) uses timeout=0 polling on the same
-    // batch_id after an earlier blocking wait succeeded; without this we'd
-    // return INVALID_BATCH because the slot was destroyed, and the game would
-    // think batch processing failed (stalling BGM progress polling).
-    //
-    // Guard rails: only trust the saved result if the batch was actually
-    // processed. In the (theoretical) case that processed==false but
-    // consumed==true (e.g. canceled worker raced with the save, or a prior
-    // timeout=16 wait returned CANCELLED), fall through to the normal wait
-    // path so the caller gets the semaphore-driven truth instead of stale
-    // state. If processed AND canceled both hold, return the saved
-    // CANCELLED result explicitly so the two code paths agree.
-    if (batch->consumed.load(std::memory_order_acquire)) {
-        if (!batch->processed.load(std::memory_order_acquire)) {
-            LOG_WARNING(Lib_Ajm,
-                        "sceAjmBatchWait batch {} consumed=true but processed=false, "
-                        "falling through to normal wait",
-                        batch_id);
-        } else if (batch->canceled.load(std::memory_order_acquire) &&
-                   batch->last_wait_result == ORBIS_OK) {
-            // Worker finished (processed=true) but the batch was also
-            // canceled; re-derive the cancelled result to stay consistent
-            // with a fresh wait through the semaphore.
-            return ORBIS_AJM_ERROR_CANCELLED;
-        } else {
-            return batch->last_wait_result;
-        }
-    }
-
     bool expected = false;
     if (!batch->waiting.compare_exchange_strong(expected, true)) {
         return ORBIS_AJM_ERROR_BUSY;
     }
 
-    const auto wait_begin = std::chrono::high_resolution_clock::now();
     if (timeout == ORBIS_AJM_WAIT_INFINITE) {
         batch->finished.acquire();
     } else if (!batch->finished.try_acquire_for(std::chrono::milliseconds(timeout))) {
         batch->waiting = false;
         return ORBIS_AJM_ERROR_IN_PROGRESS;
     }
-    const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                             std::chrono::high_resolution_clock::now() - wait_begin)
-                             .count();
-    if (wait_ms > 20) {
-        LOG_WARNING(Lib_Ajm, "sceAjmBatchWait blocked for {} ms on batch {}", wait_ms, batch_id);
-    }
 
-    // Determine the final status before marking consumed.
-    if (batch->canceled) {
-        wait_result = ORBIS_AJM_ERROR_CANCELLED;
-    } else {
-        wait_result = ORBIS_OK;
-    }
-
-    // Mark the batch as consumed so subsequent polls return the same result
-    // instead of INVALID_BATCH. The slot is recycled later by StartBuffer
-    // when the retain window is full.
     {
         std::unique_lock guard(batches_mutex);
-        batch->consumed.store(true, std::memory_order_release);
-        batch->last_wait_result = wait_result;
-        consumed_batch_ids.push_back(batch_id);
+        batches.Destroy(batch_id);
     }
 
-    return wait_result;
+    if (batch->canceled) {
+        return ORBIS_AJM_ERROR_CANCELLED;
+    }
+
+    return ORBIS_OK;
 }
 
 int AjmContext::BatchStartBuffer(u8* p_batch, u32 batch_size, const int priority,
@@ -199,39 +138,12 @@ int AjmContext::BatchStartBuffer(u8* p_batch, u32 batch_size, const int priority
     }
 
     const auto batch_info = AjmBatch::FromBatchBuffer({p_batch, batch_size});
-
-    // Before allocating a fresh slot, free consumed batches outside the
-    // recent retain window. Otherwise we hit MaxBatches=1024 slots after
-    // ~1024 StartBuffer calls and every later batch creation silently
-    // fails with ERROR_OUT_OF_MEMORY, which effectively drops 97% of the
-    // decode jobs while keeping S4U Live only barely running on the first
-    // 1023 queued jobs (af3b10c8 observed 41338 StartBuffer vs 1023
-    // WorkerPop because of this).
-    u32 trimmed = 0;
-    {
-        std::unique_lock guard(batches_mutex);
-        while (consumed_batch_ids.size() > ConsumedBatchTrimThreshold &&
-               consumed_batch_ids.size() > ConsumedBatchRetainWindow) {
-            const auto old_id = consumed_batch_ids.front();
-            consumed_batch_ids.pop_front();
-            auto* p_old_batch = batches.Get(old_id);
-            if (p_old_batch != nullptr && p_old_batch->get() != nullptr &&
-                (*p_old_batch)->consumed.load(std::memory_order_acquire)) {
-                batches.Destroy(old_id);
-                ++trimmed;
-            }
-        }
-    }
-
     std::optional<u32> batch_id;
     {
         std::unique_lock guard(batches_mutex);
         batch_id = batches.Create(batch_info);
     }
     if (!batch_id.has_value()) {
-        LOG_ERROR(Lib_Ajm,
-                  "ORBIS_AJM_ERROR_OUT_OF_MEMORY at StartBuffer (MaxBatches={}, consumed_deque={})",
-                  MaxBatches, consumed_batch_ids.size());
         return ORBIS_AJM_ERROR_OUT_OF_MEMORY;
     }
     *out_batch_id = batch_id.value();
@@ -259,14 +171,8 @@ s32 AjmContext::InstanceCreate(AjmCodecType codec_type, AjmInstanceFlags flags, 
     }
     std::optional<u32> opt_index;
     {
-        // Construct the instance (including AT9 decoder init) outside the
-        // lock to minimize exclusive lock hold time. During the S4U Live
-        // AT9 create-destroy livelock, the worker's ProcessBatch takes a
-        // shared lock on instances_mutex; a long exclusive hold here
-        // blocks every batch and stalls sceAjmBatchWait on the game thread.
-        auto instance = std::make_unique<AjmInstance>(codec_type, flags);
         std::unique_lock lock(instances_mutex);
-        opt_index = instances.Create(std::move(instance));
+        opt_index = instances.Create(std::move(std::make_unique<AjmInstance>(codec_type, flags)));
     }
     if (!opt_index.has_value()) {
         return ORBIS_AJM_ERROR_OUT_OF_RESOURCES;

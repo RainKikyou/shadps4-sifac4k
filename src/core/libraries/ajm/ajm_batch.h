@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
+// SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #pragma once
@@ -53,13 +53,6 @@ struct AjmBatch {
     std::atomic_bool waiting{};
     std::atomic_bool canceled{};
     std::atomic_bool processed{};
-    // Marked true by the first successful BatchWait so that subsequent polls
-    // (timeout=0) for the same batch_id return ORBIS_OK instead of
-    // INVALID_BATCH. The slot is recycled by BatchStartBuffer when the next
-    // batch is allocated; until then the batch remains valid for repeated wait.
-    std::atomic_bool consumed{};
-    // ORBIS_OK (0), ORBIS_AJM_ERROR_CANCELLED, etc. Saved from the first wait.
-    s32 last_wait_result = 0;
     std::binary_semaphore finished{0};
     boost::container::small_vector<AjmJob, 16> jobs;
 
