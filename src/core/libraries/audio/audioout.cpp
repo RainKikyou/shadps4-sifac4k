@@ -167,6 +167,13 @@ static void AudioOutputThread(std::shared_ptr<PortOut> port, const std::stop_tok
     Common::AccurateTimer timer(
         std::chrono::nanoseconds(1000000000ULL * port->buffer_frames / port->sample_rate));
 
+    // Diagnostic: count consecutive passthrough iterations where the guest has not
+    // submitted a new output buffer. A prolonged stall means the guest audio
+    // producer is stuck, which can surface as the *same* PCM segment being
+    // replayed (BGM loop) while the game has already moved on.
+    u32 idle_iterations = 0;
+    bool idle_warned = false;
+
     while (true) {
         timer.Start();
 
@@ -181,6 +188,22 @@ static void AudioOutputThread(std::shared_ptr<PortOut> port, const std::stop_tok
                 port->output_ready = false;
                 port->last_output_time =
                     Kernel::sceKernelGetProcessTime(); // moved from sceAudioOutOutput TOOD recheck
+                idle_iterations = 0;
+                idle_warned = false;
+            } else if (++idle_iterations == 60) { // ~320ms with no guest output
+                LOG_INFO(Lib_AudioOut,
+                         "Guest audio output stalled for {}ms on port type {}: no new buffer "
+                         "submitted",
+                         idle_iterations * 1000000ULL * port->buffer_frames / port->sample_rate /
+                             1000,
+                         static_cast<u32>(port->type));
+            } else if (idle_iterations > 60 && (idle_iterations % 600) == 0 && !idle_warned) {
+                // Escalate once past ~3s of starvation; remaining silence is expected.
+                idle_warned = true;
+                LOG_INFO(
+                    Lib_AudioOut, "Guest audio output still stalled on port type {} ({}ms so far)",
+                    static_cast<u32>(port->type),
+                    idle_iterations * 1000000ULL * port->buffer_frames / port->sample_rate / 1000);
             }
         }
 

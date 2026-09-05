@@ -86,8 +86,14 @@ public:
         convert(ptr, internal_buffer, buffer_frames, nullptr);
         HandleTiming(current_time);
 
-        if ((output_count++ & 0xF) == 0) { // Check every 16 outputs
+        if ((output_count++ & 0xFF) == 0) { // Check every 256 outputs (~once a second)
             ManageAudioQueue();
+            // Diagnostic: track the SDL queue depth over time. A long-lived linear
+            // growth means the guest out-produces the device (stale audio will
+            // replay later); a hard zero here while feeding means the device
+            // drains faster than the guest writes (gaps / repetition sources).
+            const u32 queued = SDL_GetAudioStreamQueued(stream);
+            LOG_DEBUG(Lib_AudioOut, "Audio queue heartbeat: {} bytes queued", queued);
         }
 
         if (!SDL_PutAudioStreamData(stream, internal_buffer, internal_buffer_size)) [[unlikely]] {
@@ -139,6 +145,9 @@ private:
         // Calculate timing parameters
         period_us = (1000000ULL * buffer_frames + sample_rate / 2) / sample_rate;
 
+        // Default stream layout mirrors the guest port; OpenDevice() may demote
+        // this to stereo when the host device cannot carry the native channels.
+        stream_channels = num_channels;
         // Allocate aligned internal buffer for SIMD operations
         internal_buffer_size = buffer_frames * sizeof(float) * num_channels;
 
@@ -248,8 +257,19 @@ private:
         const auto queued = SDL_GetAudioStreamQueued(stream);
 
         if (queued >= queue_threshold) [[unlikely]] {
-            LOG_DEBUG(Lib_AudioOut, "Clearing backed up audio queue ({} >= {})", queued,
-                      queue_threshold);
+            // Keep the first few clears at Info level: an output that repeatedly
+            // backs up (or drains) far past its target is a direct sign that the
+            // guest producer and the host consumer are out of sync, and has been
+            // implicated in BGM loops (stale audio replaying while the game has
+            // already advanced to the next cue).
+            static std::atomic<u32> clear_count{0};
+            if (clear_count.fetch_add(1) < 3) {
+                LOG_INFO(Lib_AudioOut, "Clearing backed up audio queue ({} >= {})", queued,
+                         queue_threshold);
+            } else {
+                LOG_DEBUG(Lib_AudioOut, "Clearing backed up audio queue ({} >= {})", queued,
+                          queue_threshold);
+            }
             SDL_ClearAudioStream(stream);
             CalculateQueueThreshold();
         }
@@ -282,9 +302,15 @@ private:
             SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream), &dev_spec, nullptr) &&
             dev_spec.channels >= 1 && dev_spec.channels <= 2) {
             ps4_downmix = true;
-            internal_buffer_size = buffer_frames * sizeof(float) * 2;
-            LOG_INFO(Lib_AudioOut, "Stereo device: using PS4-accurate {}ch->stereo downmix",
-                     num_channels);
+            // The PS4-accurate downmix folds the guest 5.1/7.1 bus into stereo on
+            // the host, so the stream now consumes 2ch data while the guest port
+            // still reports its native 8ch frame count.
+            stream_channels = 2;
+            internal_buffer_size = buffer_frames * sizeof(float) * stream_channels;
+            LOG_INFO(Lib_AudioOut,
+                     "Stereo device '{}': using PS4-accurate {}ch->stereo downmix "
+                     "(device channels = {})",
+                     device_name, num_channels, dev_spec.channels);
 
             SDL_DestroyAudioStream(stream);
             const SDL_AudioSpec stereo_fmt = {
@@ -320,8 +346,8 @@ private:
             return false;
         }
 
-        LOG_INFO(Lib_AudioOut, "Opened audio device: {} ({} Hz, {} ch, gain: {:.3f})", device_name,
-                 sample_rate, num_channels, initial_gain);
+        LOG_INFO(Lib_AudioOut, "Opened audio device: {} ({} Hz, {} ch, stream {} ch, gain: {:.3f})",
+                 device_name, sample_rate, num_channels, stream_channels, initial_gain);
         return true;
     }
 
@@ -493,11 +519,12 @@ private:
             LOG_WARNING(Lib_AudioOut, "Failed to get SDL buffer size: {}", SDL_GetError());
         }
 
-        const u32 sdl_buffer_size = sdl_buffer_frames * sizeof(float) * num_channels;
+        const u32 sdl_buffer_size = sdl_buffer_frames * sizeof(float) * stream_channels;
         queue_threshold = std::max(guest_buffer_size, sdl_buffer_size) * QUEUE_MULTIPLIER;
 
-        LOG_DEBUG(Lib_AudioOut, "Audio queue threshold: {} bytes (SDL buffer: {} frames)",
-                  queue_threshold, sdl_buffer_frames);
+        LOG_DEBUG(Lib_AudioOut,
+                  "Audio queue threshold: {} bytes (SDL buffer: {} frames, stream {}/{} ch)",
+                  queue_threshold, sdl_buffer_frames, stream_channels, num_channels);
     }
 
     using ConverterFunc = void (*)(const void* src, void* dst, u32 frames, const float* volumes);
@@ -632,6 +659,9 @@ private:
     const bool is_std;
     // Set when the output device is stereo and we fold 5.1/7.1 ourselves.
     bool ps4_downmix{false};
+    // Channel count of the SDL stream feeding the device; equals num_channels
+    // unless the PS4-accurate downmix is active (always 2 then).
+    u32 stream_channels{0};
     const std::array<int, 8> channel_layout;
 
     alignas(64) u64 period_us{0};
