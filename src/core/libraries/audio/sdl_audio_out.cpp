@@ -86,22 +86,9 @@ public:
         convert(ptr, internal_buffer, buffer_frames, nullptr);
         HandleTiming(current_time);
 
-        if ((output_count++ & 0xFF) == 0) { // Check every 256 outputs (~once a second)
+        if ((output_count++ & 0xF) == 0) { // Check every 16 outputs
             ManageAudioQueue();
-            // Diagnostic: track the SDL queue depth over time. A long-lived linear
-            // growth means the guest out-produces the device (stale audio will
-            // replay later); a hard zero here while feeding means the device
-            // drains faster than the guest writes (gaps / repetition sources).
-            const u32 queued = SDL_GetAudioStreamQueued(stream);
-            LOG_DEBUG(Lib_AudioOut, "Audio queue heartbeat: {} bytes queued", queued);
         }
-
-        // Diagnostic: PCM repetition detector. While the guest produces normal
-        // (advancing) audio this stays silent; it logs only when the exact same
-        // buffer content is fed repeatedly (~640ms+ of identical PCM), which is
-        // the literal form of "one BGM keeps repeating" when it comes from stale
-        // or stalled producers.
-        CheckForRepeatedPcm(ptr);
 
         if (!SDL_PutAudioStreamData(stream, internal_buffer, internal_buffer_size)) [[unlikely]] {
             LOG_ERROR(Lib_AudioOut, "Failed to output to SDL audio stream: {}", SDL_GetError());
@@ -152,9 +139,6 @@ private:
         // Calculate timing parameters
         period_us = (1000000ULL * buffer_frames + sample_rate / 2) / sample_rate;
 
-        // Default stream layout mirrors the guest port; OpenDevice() may demote
-        // this to stereo when the host device cannot carry the native channels.
-        stream_channels = num_channels;
         // Allocate aligned internal buffer for SIMD operations
         internal_buffer_size = buffer_frames * sizeof(float) * num_channels;
 
@@ -260,53 +244,12 @@ private:
         }
     }
 
-    // Digest over the first 8 bytes of the guest output buffer: enough to fingerprint
-    // a 256-frame PCM block without hashing the whole thing every 5ms.
-    void CheckForRepeatedPcm(const void* ptr) {
-        const auto* bytes = static_cast<const u8*>(ptr);
-        u32 digest = 2166136261u;
-        for (u32 i = 0; i < 8; i++) {
-            digest = (digest ^ bytes[i]) * 16777619u;
-        }
-        if (digest == pcm_last_digest) {
-            if (++pcm_identical_streak == 120) {
-                LOG_INFO(Lib_AudioOut,
-                         "Audio output feeding identical PCM buffer (digest {:#010x}) for ~640ms; "
-                         "{}ch port - possible BGM loop source",
-                         digest, num_channels);
-            } else if (pcm_identical_streak > 120 && (pcm_identical_streak % 600) == 0) {
-                LOG_INFO(Lib_AudioOut,
-                         "Audio output STILL feeding identical PCM (digest {:#010x}), ~{}s so far",
-                         digest, pcm_identical_streak * 256 / 48000);
-            }
-        } else {
-            if (pcm_identical_streak >= 120) {
-                LOG_INFO(Lib_AudioOut,
-                         "Audio output recovered from identical-PCM streak after {} outputs",
-                         pcm_identical_streak);
-            }
-            pcm_identical_streak = 0;
-            pcm_last_digest = digest;
-        }
-    }
-
     void ManageAudioQueue() {
         const auto queued = SDL_GetAudioStreamQueued(stream);
 
         if (queued >= queue_threshold) [[unlikely]] {
-            // Keep the first few clears at Info level: an output that repeatedly
-            // backs up (or drains) far past its target is a direct sign that the
-            // guest producer and the host consumer are out of sync, and has been
-            // implicated in BGM loops (stale audio replaying while the game has
-            // already advanced to the next cue).
-            static std::atomic<u32> clear_count{0};
-            if (clear_count.fetch_add(1) < 3) {
-                LOG_INFO(Lib_AudioOut, "Clearing backed up audio queue ({} >= {})", queued,
-                         queue_threshold);
-            } else {
-                LOG_DEBUG(Lib_AudioOut, "Clearing backed up audio queue ({} >= {})", queued,
-                          queue_threshold);
-            }
+            LOG_DEBUG(Lib_AudioOut, "Clearing backed up audio queue ({} >= {})", queued,
+                      queue_threshold);
             SDL_ClearAudioStream(stream);
             CalculateQueueThreshold();
         }
@@ -335,21 +278,13 @@ private:
         }
 
         SDL_AudioSpec dev_spec{};
-        const bool stereo_device =
-            num_channels >= 6 &&
+        if (num_channels >= 6 &&
             SDL_GetAudioDeviceFormat(SDL_GetAudioStreamDevice(stream), &dev_spec, nullptr) &&
-            dev_spec.channels >= 1 && dev_spec.channels <= 2;
-        if (stereo_device && EmulatorSettings.IsAudioPs4Downmix()) {
+            dev_spec.channels >= 1 && dev_spec.channels <= 2) {
             ps4_downmix = true;
-            // The PS4-accurate downmix folds the guest 5.1/7.1 bus into stereo on
-            // the host, so the stream now consumes 2ch data while the guest port
-            // still reports its native 8ch frame count.
-            stream_channels = 2;
-            internal_buffer_size = buffer_frames * sizeof(float) * stream_channels;
-            LOG_INFO(Lib_AudioOut,
-                     "Stereo device '{}': using PS4-accurate {}ch->stereo downmix "
-                     "(device channels = {})",
-                     device_name, num_channels, dev_spec.channels);
+            internal_buffer_size = buffer_frames * sizeof(float) * 2;
+            LOG_INFO(Lib_AudioOut, "Stereo device: using PS4-accurate {}ch->stereo downmix",
+                     num_channels);
 
             SDL_DestroyAudioStream(stream);
             const SDL_AudioSpec stereo_fmt = {
@@ -362,16 +297,6 @@ private:
                 LOG_ERROR(Lib_AudioOut, "Failed to recreate SDL audio stream: {}", SDL_GetError());
                 return false;
             }
-        } else if (stereo_device) {
-            // Keep the native 8ch stream and let SDL3's AudioStream resample the
-            // guest 5.1/7.1 bus down to the stereo device. This is the same code
-            // path the working baseline uses on an 8ch-capable device, minus the
-            // custom folding; avoids the stream-recreation dance implicated in
-            // "one BGM keeps repeating" on stereo hosts.
-            LOG_INFO(Lib_AudioOut,
-                     "Stereo device '{}': keeping {}ch stream, SDL converts to {}ch (PS4-accurate "
-                     "downmix disabled)",
-                     device_name, num_channels, dev_spec.channels);
         }
 
         // Configure channel mapping (input is already stereo when folding)
@@ -395,8 +320,8 @@ private:
             return false;
         }
 
-        LOG_INFO(Lib_AudioOut, "Opened audio device: {} ({} Hz, {} ch, stream {} ch, gain: {:.3f})",
-                 device_name, sample_rate, num_channels, stream_channels, initial_gain);
+        LOG_INFO(Lib_AudioOut, "Opened audio device: {} ({} Hz, {} ch, gain: {:.3f})", device_name,
+                 sample_rate, num_channels, initial_gain);
         return true;
     }
 
@@ -568,12 +493,11 @@ private:
             LOG_WARNING(Lib_AudioOut, "Failed to get SDL buffer size: {}", SDL_GetError());
         }
 
-        const u32 sdl_buffer_size = sdl_buffer_frames * sizeof(float) * stream_channels;
+        const u32 sdl_buffer_size = sdl_buffer_frames * sizeof(float) * num_channels;
         queue_threshold = std::max(guest_buffer_size, sdl_buffer_size) * QUEUE_MULTIPLIER;
 
-        LOG_DEBUG(Lib_AudioOut,
-                  "Audio queue threshold: {} bytes (SDL buffer: {} frames, stream {}/{} ch)",
-                  queue_threshold, sdl_buffer_frames, stream_channels, num_channels);
+        LOG_DEBUG(Lib_AudioOut, "Audio queue threshold: {} bytes (SDL buffer: {} frames)",
+                  queue_threshold, sdl_buffer_frames);
     }
 
     using ConverterFunc = void (*)(const void* src, void* dst, u32 frames, const float* volumes);
@@ -708,12 +632,6 @@ private:
     const bool is_std;
     // Set when the output device is stereo and we fold 5.1/7.1 ourselves.
     bool ps4_downmix{false};
-    // Channel count of the SDL stream feeding the device; equals num_channels
-    // unless the PS4-accurate downmix is active (always 2 then).
-    u32 stream_channels{0};
-    // Diagnostic state for the PCM repetition detector.
-    u32 pcm_last_digest{0};
-    u32 pcm_identical_streak{0};
     const std::array<int, 8> channel_layout;
 
     alignas(64) u64 period_us{0};

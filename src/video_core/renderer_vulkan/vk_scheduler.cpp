@@ -3,16 +3,14 @@
 
 #include "common/assert.h"
 #include "common/debug.h"
-#include "common/logging/log.h"
 #include "common/thread.h"
-#include "core/emulator_settings.h"
 #include "imgui/renderer/texture_manager.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 
 namespace Vulkan {
 
-std::recursive_mutex Scheduler::submit_mutex;
+std::mutex Scheduler::submit_mutex;
 
 Scheduler::Scheduler(const Instance& instance)
     : instance{instance}, master_semaphore{instance}, command_pool{instance, &master_semaphore} {
@@ -151,9 +149,8 @@ void Scheduler::AllocateWorkerCommandBuffers() {
 }
 
 void Scheduler::SubmitExecution(SubmitInfo& info) {
+    std::scoped_lock lk{submit_mutex};
     const u64 signal_value = master_semaphore.NextTick();
-
-    std::unique_lock lk{submit_mutex};
 
 #if TRACY_GPU_ENABLED
     auto* profiler_ctx = instance.GetProfilerContext();
@@ -196,29 +193,9 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
-    // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
-    // (nvlddmkm TDR event 153) when submissions to the graphics queue overlap
-    // in execution. The RenderDoc layer works around it by serializing every
-    // submission; replicate that on NVIDIA only (AMD is unaffected).
-    //
-    // Serializing with waitIdle is VERY expensive: it couples the guest frame
-    // thread to full GPU completion of every submission, so during heavy
-    // pipeline compilation the entire game freezes and the audio producer
-    // stalls (CUSA15006 BGM port observed starved >3.2s at startup, the game
-    // then restarts its current BGM cue - "one song repeats"). The present-copy
-    // + Immediate/BGRA workarounds already cover the present-path hang, so this
-    // is now opt-in via nvidia_wo_submit_waitidle for title bisection.
-    if (EmulatorSettings.IsNvidiaWoSubmitWaitidle() &&
-        instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
-        instance.GetGraphicsQueue().waitIdle();
-    }
-
-    // Release submit_mutex before Refresh/Allocate/PopPendingOperations to avoid
-    // deadlock if a deferred callback re-enters SubmitExecution on the same thread.
-    lk.unlock();
-
     master_semaphore.Refresh();
     AllocateWorkerCommandBuffers();
+
     // Apply pending operations
     PopPendingOperations();
 }
