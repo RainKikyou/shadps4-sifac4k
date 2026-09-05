@@ -275,7 +275,7 @@ s32 PS4_SYSV_ABI sceNpCheckPlus(s32 req_id, const OrbisNpCheckPlusParameter* par
         return CompleteRequest(*req, ORBIS_NP_ERROR_SIGNED_OUT);
     }
     LOG_DEBUG(Lib_NpManager, "req_id = {:#x}, features = {:#x}", req_id, param->features);
-    // Grant PS+ — shadNet has no subscription gating.
+    // Grant PS+ ï¿½ shadNet has no subscription gating.
     result->authorized = true;
     return CompleteRequest(*req, ORBIS_OK);
 }
@@ -1048,10 +1048,26 @@ s32 PS4_SYSV_ABI sceNpUnregisterNpReachabilityStateCallback() {
 
 s32 PS4_SYSV_ABI sceNpRegisterStateCallbackForToolkit(OrbisNpStateCallbackForNpToolkit callback,
                                                       void* userdata) {
-    LOG_ERROR(Lib_NpManager, "(STUBBED) called");
-    std::scoped_lock lk{g_np_state_callbacks_mutex};
-    NpStateCbForNp.func = callback;
-    NpStateCbForNp.userdata = userdata;
+    OrbisNpStateCallbackForNpToolkit stored_cb{};
+    void* stored_ud{};
+    {
+        std::scoped_lock lk{g_np_state_callbacks_mutex};
+        NpStateCbForNp.func = callback;
+        NpStateCbForNp.userdata = userdata;
+        stored_cb = callback;
+        stored_ud = userdata;
+    }
+    // Offline mode: deliver a SignedIn state for the boot user right away, so NpToolkit2-based
+    // games (e.g. Unity NpToolkit2) always have a valid user context for auth/profile requests.
+    // Invoke the guest callback outside the lock to avoid re-entrancy deadlocks.
+    if (stored_cb != nullptr) {
+        s32 initial_user = 0;
+        if (Libraries::UserService::sceUserServiceGetInitialUser(&initial_user) == ORBIS_OK) {
+            LOG_INFO(Lib_NpManager, "Offline: reporting SignedIn for user {} to NpToolkit",
+                     initial_user);
+            stored_cb(initial_user, OrbisNpState::SignedIn, stored_ud);
+        }
+    }
     return ORBIS_OK;
 }
 

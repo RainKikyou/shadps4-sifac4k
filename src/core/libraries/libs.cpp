@@ -47,6 +47,7 @@
 #include "core/libraries/np/np_score/np_score.h"
 #include "core/libraries/np/np_signaling/np_signaling.h"
 #include "core/libraries/np/np_sns_facebook_dialog.h"
+#include "core/libraries/np/np_toolkit2.h"
 #include "core/libraries/np/np_trophy.h"
 #include "core/libraries/np/np_tus/np_tus.h"
 #include "core/libraries/np/np_web_api/np_web_api.h"
@@ -133,6 +134,7 @@ void InitHLELibs(Core::Loader::SymbolsResolver* sym) {
             {"libSceNpProfileDialog.sprx", Libraries::Np::NpProfileDialog::RegisterLib},
             {"libSceNpSnsFacebookDialog.sprx", Libraries::Np::NpSnsFacebookDialog::RegisterLib},
             {"libSceNpAuth.sprx", Libraries::Np::NpAuth::RegisterLib},
+            {"libSceNpToolkit2.sprx", Libraries::Np::NpTk2::RegisterLib},
             {"libSceNpParty.sprx", Libraries::Np::NpParty::RegisterLib},
             {"libSceNpPartner001.sprx", Libraries::Np::NpPartner::RegisterLib},
             {"libSceNpTus.sprx", Libraries::Np::NpTus::RegisterLib},
