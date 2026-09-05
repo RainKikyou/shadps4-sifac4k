@@ -5,6 +5,7 @@
 #include "common/debug.h"
 #include "common/logging/log.h"
 #include "common/thread.h"
+#include "core/emulator_settings.h"
 #include "imgui/renderer/texture_manager.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -199,7 +200,16 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     // (nvlddmkm TDR event 153) when submissions to the graphics queue overlap
     // in execution. The RenderDoc layer works around it by serializing every
     // submission; replicate that on NVIDIA only (AMD is unaffected).
-    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+    //
+    // Serializing with waitIdle is VERY expensive: it couples the guest frame
+    // thread to full GPU completion of every submission, so during heavy
+    // pipeline compilation the entire game freezes and the audio producer
+    // stalls (CUSA15006 BGM port observed starved >3.2s at startup, the game
+    // then restarts its current BGM cue - "one song repeats"). The present-copy
+    // + Immediate/BGRA workarounds already cover the present-path hang, so this
+    // is now opt-in via nvidia_wo_submit_waitidle for title bisection.
+    if (EmulatorSettings.IsNvidiaWoSubmitWaitidle() &&
+        instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
         instance.GetGraphicsQueue().waitIdle();
     }
 

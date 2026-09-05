@@ -500,6 +500,15 @@ struct VulkanSettings {
     // swapchain uses R8G8B8A8 (TDR after ~10-40 presents). BGRA, the format the
     // Windows compositor natively uses, routes around the driver bug entirely.
     Setting<bool> nvidia_wo_bgra{true};
+    // Serialize every queue submission with vkQueueWaitIdle on NVIDIA. This was
+    // added to dodge submit-overlap driver deadlocks, but it couples the guest
+    // frame thread to GPU progress: during heavy pipeline compilation the whole
+    // game freezes and the audio producer stalls (BGM port observed starved for
+    // 3.2s+ at startup in CUSA15006, the game then restarts its BGM cue -> the
+    // "one song repeats" loop). The present-copy + Immediate path already covers
+    // the present bug, so this serialization is now optional; keep the toggle in
+    // case a driver build still needs it (CUSA15006.json can flip it).
+    Setting<bool> nvidia_wo_submit_waitidle{false};
     std::vector<OverrideItem> GetOverrideableFields() const {
         return std::vector<OverrideItem>{
             make_override<VulkanSettings>("gpu_id", &VulkanSettings::gpu_id),
@@ -529,6 +538,8 @@ struct VulkanSettings {
             make_override<VulkanSettings>("nvidia_wo_present_copy",
                                           &VulkanSettings::nvidia_wo_present_copy),
             make_override<VulkanSettings>("nvidia_wo_bgra", &VulkanSettings::nvidia_wo_bgra),
+            make_override<VulkanSettings>("nvidia_wo_submit_waitidle",
+                                          &VulkanSettings::nvidia_wo_submit_waitidle),
         };
     }
 };
@@ -538,7 +549,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VulkanSettings, gpu_id, renderdoc_enabled, vk
                                    vkhost_markers, vkguest_markers, pipeline_cache_enabled,
                                    pipeline_cache_archived, nvidia_wo_disable_optimization,
                                    nvidia_wo_push_descriptors, nvidia_wo_min_images,
-                                   nvidia_wo_present_copy, nvidia_wo_bgra)
+                                   nvidia_wo_present_copy, nvidia_wo_bgra,
+                                   nvidia_wo_submit_waitidle)
 
 // -------------------------------
 // Main manager
@@ -823,6 +835,7 @@ public:
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoMinImages, nvidia_wo_min_images)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoPresentCopy, nvidia_wo_present_copy)
     SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoBgra, nvidia_wo_bgra)
+    SETTING_FORWARD_BOOL(m_vulkan, NvidiaWoSubmitWaitidle, nvidia_wo_submit_waitidle)
 
 #undef SETTING_FORWARD
 #undef SETTING_FORWARD_BOOL
