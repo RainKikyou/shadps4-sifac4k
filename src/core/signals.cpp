@@ -150,9 +150,19 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
             const auto* ctx = pExp->ContextRecord;
             LOG_CRITICAL(Debug, "  RIP={:#018x} RSP={:#018x} RBP={:#018x} FLAGS={:#x}", ctx->Rip,
                          ctx->Rsp, ctx->Rbp, ctx->EFlags);
+            if (pExp->ExceptionRecord != nullptr) {
+                LOG_CRITICAL(Debug, "  Parity: NumParams={} Info[0]={:#018x} Info[1]={:#018x}",
+                             pExp->ExceptionRecord->NumberParameters,
+                             pExp->ExceptionRecord->NumberParameters > 0
+                                 ? pExp->ExceptionRecord->ExceptionInformation[0]
+                                 : 0ull,
+                             pExp->ExceptionRecord->NumberParameters > 1
+                                 ? pExp->ExceptionRecord->ExceptionInformation[1]
+                                 : 0ull);
+            }
             const auto* sp = reinterpret_cast<const u64*>(ctx->Rsp);
-            for (u32 i = 0; i < 24; ++i) {
-                LOG_CRITICAL(Debug, "  STACK[{:2}] = {:#018x}", i, sp[i]);
+            for (u32 i = 0; i < 192; ++i) {
+                LOG_CRITICAL(Debug, "  STACK[{:3}] = {:#018x}", i, sp[i]);
             }
         }
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
