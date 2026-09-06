@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 
 #include "common/logging/log.h"
@@ -261,6 +262,13 @@ void PS4_SYSV_ABI ToolkitNpProfilesD1(void* /*self*/) {}
 } // namespace
 
 void RegisterLib(Core::Loader::SymbolsResolver* sym) {
+    // Diagnostic A/B switch: with KAMEN_NPTK2_OFF=1 nothing is registered and the
+    // original aerolib stubs take over, isolating whether this HLE is involved in the
+    // unhandled C++ exception seen on boot.
+    if (std::getenv("KAMEN_NPTK2_OFF") != nullptr) {
+        LOG_INFO(Lib_NpManager, "NpTk2: HLE disabled by KAMEN_NPTK2_OFF, using aerolib stubs");
+        return;
+    }
     // Core
     LIB_FUNCTION("LLdnqVnnNBQ", "libSceNpToolkit2", 1, "libSceNpToolkit2", ToolkitCoreInit);
     // Auth
