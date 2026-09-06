@@ -143,6 +143,18 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                                       : code != EXCEPTION_BREAKPOINT;
     if (report_unhandled) { // Windows static guest red-zone protection
         LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {}", code, address);
+        // Diagnostics: dump the faulting thread's guest registers and raw stack words so an
+        // unhandled C++ exception (0xe06d7363) can be attributed to a guest module via its
+        // module base (see the module load addresses in the log).
+        if (pExp != nullptr && pExp->ContextRecord != nullptr) {
+            const auto* ctx = pExp->ContextRecord;
+            LOG_CRITICAL(Debug, "  RIP={:#018x} RSP={:#018x} RBP={:#018x} FLAGS={:#x}", ctx->Rip,
+                         ctx->Rsp, ctx->Rbp, ctx->EFlags);
+            const auto* sp = reinterpret_cast<const u64*>(ctx->Rsp);
+            for (u32 i = 0; i < 24; ++i) {
+                LOG_CRITICAL(Debug, "  STACK[{:2}] = {:#018x}", i, sp[i]);
+            }
+        }
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
 
