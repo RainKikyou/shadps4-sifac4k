@@ -17,6 +17,7 @@
 #include "core/libraries/libs.h"
 #include "core/libraries/np/np_error.h"
 #include "core/libraries/np/np_manager.h"
+#include "core/libraries/np/np_toolkit2.h"
 #include "core/tls.h"
 #include "core/user_manager.h"
 #include "np_handler.h"
@@ -1060,7 +1061,7 @@ s32 PS4_SYSV_ABI sceNpRegisterStateCallbackForToolkit(OrbisNpStateCallbackForNpT
     // Offline mode: deliver a SignedIn state for the boot user right away, so NpToolkit2-based
     // games (e.g. Unity NpToolkit2) always have a valid user context for auth/profile requests.
     // Invoke the guest callback outside the lock to avoid re-entrancy deadlocks.
-    if (stored_cb != nullptr) {
+    if (stored_cb != nullptr && !NpTk2::IsNpTk2HleDisabled()) {
         s32 initial_user = 0;
         if (Libraries::UserService::sceUserServiceGetInitialUser(&initial_user) == ORBIS_OK) {
             LOG_INFO(Lib_NpManager, "Offline: reporting SignedIn for user {} to NpToolkit",

@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "common/logging/log.h"
+#include "common/path_util.h"
 #include "common/types.h"
 #include "core/libraries/libs.h"
 #include "core/libraries/system/userservice.h"
@@ -261,12 +262,24 @@ void PS4_SYSV_ABI ToolkitNpProfilesD1(void* /*self*/) {}
 
 } // namespace
 
-void RegisterLib(Core::Loader::SymbolsResolver* sym) {
-    // Diagnostic A/B switch: with KAMEN_NPTK2_OFF=1 nothing is registered and the
-    // original aerolib stubs take over, isolating whether this HLE is involved in the
-    // unhandled C++ exception seen on boot.
+bool IsNpTk2HleDisabled() {
     if (std::getenv("KAMEN_NPTK2_OFF") != nullptr) {
-        LOG_INFO(Lib_NpManager, "NpTk2: HLE disabled by KAMEN_NPTK2_OFF, using aerolib stubs");
+        return true;
+    }
+    if (std::getenv("KAMEN_NPTK2_ON") != nullptr) {
+        return false;
+    }
+    // Manual switch that works with GUI launchers: create <user dir>/npTk2Off to disable.
+    return std::filesystem::exists(Common::FS::GetUserPath(Common::FS::PathType::UserDir) /
+                                   "npTk2Off");
+}
+
+void RegisterLib(Core::Loader::SymbolsResolver* sym) {
+    // Diagnostic A/B switch: with the switch set, nothing is registered and the original
+    // aerolib stubs take over, isolating whether this HLE is involved in the unhandled
+    // C++ exception seen on boot.
+    if (IsNpTk2HleDisabled()) {
+        LOG_INFO(Lib_NpManager, "NpTk2: HLE disabled by switch, using aerolib stubs");
         return;
     }
     // Core
