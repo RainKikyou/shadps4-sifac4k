@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <mutex>
 #include <ranges>
 
 #include "common/hash.h"
@@ -25,6 +26,13 @@ namespace Vulkan {
 using Shader::LogicalStage;
 using Shader::Output;
 using Shader::Stage;
+
+// NVIDIA drivers (observed on 610.88 and newer) can TDR when several worker
+// threads call vkCreate*Pipelines concurrently (driver-internal shader
+// compilation races). Serialize pipeline creation so the driver only ever sees
+// one pipeline being built at a time. Recursive so a pipeline constructor that
+// builds helper pipelines cannot self-deadlock.
+static std::recursive_mutex pipeline_compile_mutex;
 
 constexpr static auto SpirvVersion1_6 = 0x00010600U;
 
@@ -358,6 +366,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
 }
 
 const ComputePipeline* PipelineCache::GetComputePipeline() {
+    std::scoped_lock lock{pipeline_compile_mutex};
     if (!RefreshComputeKey()) {
         return nullptr;
     }
