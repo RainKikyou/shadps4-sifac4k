@@ -330,24 +330,13 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
         LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {:#x}", pipeline_hash);
 
         GraphicsPipeline::SerializationSupport sdata{};
-<<<<<<< HEAD
-=======
         // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
         // (nvlddmkm TDR event 153) when a new pipeline is created while the GPU is
         // still executing previously submitted frames. RenderDoc avoids this by
         // serializing GPU work; mimic that here, NVIDIA only.
         if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
-            const auto t_wait_begin = std::chrono::steady_clock::now();
             instance.GetGraphicsQueue().waitIdle();
-            const auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     std::chrono::steady_clock::now() - t_wait_begin)
-                                     .count();
-            LOG_INFO(Render_Vulkan,
-                     "Serialized GPU (waitIdle {} ms) before creating graphics pipeline {:#x}",
-                     wait_ms, pipeline_hash);
         }
-        const auto t_pipe_begin = std::chrono::steady_clock::now();
->>>>>>> 58864b74 (video_core: serialize GPU before pipeline creation on NVIDIA to avoid TDR)
         it.value() = std::make_unique<GraphicsPipeline>(
             instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
             runtime_infos, fetch_shader, modules, sdata, false);
