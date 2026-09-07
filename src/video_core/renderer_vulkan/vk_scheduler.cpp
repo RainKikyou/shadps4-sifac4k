@@ -193,9 +193,13 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
     auto submit_result = instance.GetGraphicsQueue().submit(submit_info, info.fence);
     ASSERT_MSG(submit_result != vk::Result::eErrorDeviceLost, "Device lost during submit");
 
-    // Serialize GPU submissions (mimics RenderDoc's serialized submit behaviour) to
-    // work around an NVIDIA driver hang on some title render passes.
-    instance.GetGraphicsQueue().waitIdle();
+    // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
+    // (nvlddmkm TDR event 153) when submissions to the graphics queue overlap
+    // in execution. The RenderDoc layer works around it by serializing every
+    // submission; replicate that on NVIDIA only (AMD is unaffected).
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+        instance.GetGraphicsQueue().waitIdle();
+    }
 
     // Release submit_mutex before Refresh/Allocate/PopPendingOperations to avoid
     // deadlock if a deferred callback re-enters SubmitExecution on the same thread.
