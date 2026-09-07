@@ -149,7 +149,7 @@ void Scheduler::AllocateWorkerCommandBuffers() {
 }
 
 void Scheduler::SubmitExecution(SubmitInfo& info) {
-    std::scoped_lock lk{submit_mutex};
+    std::unique_lock lk{submit_mutex};
     const u64 signal_value = master_semaphore.NextTick();
 
 #if TRACY_GPU_ENABLED
