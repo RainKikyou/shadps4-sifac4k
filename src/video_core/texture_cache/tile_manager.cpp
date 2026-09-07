@@ -12,6 +12,7 @@
 
 #include "video_core/host_shaders/tiling_comp.h"
 
+#include <chrono>
 #include <magic_enum/magic_enum.hpp>
 #include <vk_mem_alloc.h>
 
@@ -142,6 +143,10 @@ vk::Pipeline TileManager::GetTilingPipeline(const ImageInfo& info, bool is_tiler
     for (const auto& def : defines) {
         LOG_INFO(Render_Vulkan, "#define {}", def);
     }
+    if (module == VK_NULL_HANDLE) {
+        LOG_ERROR(Render_Vulkan, "Failed to compile tiling shader {}", module_name);
+        return VK_NULL_HANDLE;
+    }
     Vulkan::SetObjectName(device, module, module_name);
     const vk::PipelineShaderStageCreateInfo shader_ci = {
         .stage = vk::ShaderStageFlagBits::eCompute,
@@ -152,10 +157,20 @@ vk::Pipeline TileManager::GetTilingPipeline(const ImageInfo& info, bool is_tiler
         .stage = shader_ci,
         .layout = *pl_layout,
     };
+    // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
+    // (nvlddmkm TDR event 153) when a new pipeline is created while the GPU is
+    // still executing previously submitted frames. Serialize, NVIDIA only.
+    if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+        instance.GetGraphicsQueue().waitIdle();
+    }
     auto [result, pipeline] =
         device.createComputePipelineUnique(VK_NULL_HANDLE, compute_pipeline_ci);
-    ASSERT_MSG(result == vk::Result::eSuccess, "Detiler pipeline creation failed {}",
-               vk::to_string(result));
+    if (result != vk::Result::eSuccess) {
+        LOG_ERROR(Render_Vulkan, "Failed to create {} pipeline: {}", module_name,
+                  vk::to_string(result));
+        device.destroyShaderModule(module);
+        return VK_NULL_HANDLE;
+    }
     tiling_pipelines[pl_id] = std::move(pipeline);
     device.destroyShaderModule(module);
     return *tiling_pipelines[pl_id];
@@ -194,7 +209,11 @@ TileManager::Result TileManager::DetileImage(vk::Buffer in_buffer, u32 in_offset
     scheduler.EndRendering();
 
     const auto cmdbuf = scheduler.CommandBuffer();
-    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, GetTilingPipeline(info, false));
+    auto pipeline = GetTilingPipeline(info, false);
+    if (pipeline == VK_NULL_HANDLE) {
+        return {in_buffer, in_offset};
+    }
+    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
 
     const vk::DescriptorBufferInfo tiled_buffer_info{
         .buffer = in_buffer,
@@ -279,7 +298,11 @@ void TileManager::TileImage(Image& in_image, std::span<vk::BufferImageCopy> buff
     const auto cmdbuf = scheduler.CommandBuffer();
     in_image.Download(buffer_copies, temp_buffer, 0, copy_size);
 
-    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, GetTilingPipeline(info, true));
+    auto pipeline = GetTilingPipeline(info, true);
+    if (pipeline == VK_NULL_HANDLE) {
+        return;
+    }
+    cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
 
     const vk::DescriptorBufferInfo tiled_buffer_info{
         .buffer = out_buffer,

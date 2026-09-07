@@ -134,6 +134,19 @@ private:
     std::condition_variable_any frame_cv;
     std::optional<ImGui::RefCountedTexture> splash_img;
     std::vector<VAddr> vo_buffers_addr;
+
+    // NVIDIA 610.88 windowed-present workaround: staging image used to route the
+    // swapchain image through a copy-out/copy-in pass before present (mimics
+    // RenderDoc's capture). Tracks its own size so it can be recreated on window
+    // resize.
+    vk::Image present_staging{};
+    VmaAllocation present_staging_alloc{};
+    u32 present_staging_width{};
+    u32 present_staging_height{};
+    // True when the swapchain extent is valid for staging creation; reset on resize.
+    bool staging_size_valid{true};
+    // Used to report staging creation failure only once per session (avoids spam).
+    bool present_staging_failure_logged{false};
 };
 
 } // namespace Vulkan

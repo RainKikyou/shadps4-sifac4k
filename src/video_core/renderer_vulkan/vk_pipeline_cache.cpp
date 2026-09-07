@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <mutex>
 #include <ranges>
 
 #include "common/hash.h"
@@ -25,6 +26,13 @@ namespace Vulkan {
 using Shader::LogicalStage;
 using Shader::Output;
 using Shader::Stage;
+
+// NVIDIA drivers (observed on 610.88 and newer) can TDR when several worker
+// threads call vkCreate*Pipelines concurrently (driver-internal shader
+// compilation races). Serialize pipeline creation so the driver only ever sees
+// one pipeline being built at a time. Recursive so a pipeline constructor that
+// builds helper pipelines cannot self-deadlock.
+static std::recursive_mutex pipeline_compile_mutex;
 
 constexpr static auto SpirvVersion1_6 = 0x00010600U;
 
@@ -330,6 +338,13 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
         LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {:#x}", pipeline_hash);
 
         GraphicsPipeline::SerializationSupport sdata{};
+        // NVIDIA drivers (observed on 610.88) can deadlock at the driver level
+        // (nvlddmkm TDR event 153) when a new pipeline is created while the GPU is
+        // still executing previously submitted frames. RenderDoc avoids this by
+        // serializing GPU work; mimic that here, NVIDIA only.
+        if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+            instance.GetGraphicsQueue().waitIdle();
+        }
         it.value() = std::make_unique<GraphicsPipeline>(
             instance, scheduler, desc_heap, profile, graphics_key, *pipeline_cache, infos,
             runtime_infos, fetch_shader, modules, sdata, false);
@@ -351,6 +366,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
 }
 
 const ComputePipeline* PipelineCache::GetComputePipeline() {
+    std::scoped_lock lock{pipeline_compile_mutex};
     if (!RefreshComputeKey()) {
         return nullptr;
     }
@@ -360,6 +376,10 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
         LOG_INFO(Render_Vulkan, "Compiling compute pipeline {:#x}", pipeline_hash);
 
         ComputePipeline::SerializationSupport sdata{};
+        // See the same NVIDIA serialization note in GetGraphicsPipeline().
+        if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
+            instance.GetGraphicsQueue().waitIdle();
+        }
         it.value() = std::make_unique<ComputePipeline>(instance, scheduler, desc_heap, profile,
                                                        *pipeline_cache, compute_key, *infos[0],
                                                        modules[0], sdata, false);
