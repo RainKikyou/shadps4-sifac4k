@@ -143,6 +143,10 @@ private:
     VmaAllocation present_staging_alloc{};
     u32 present_staging_width{};
     u32 present_staging_height{};
+    // True when the swapchain extent is valid for staging creation; reset on resize.
+    bool staging_size_valid{true};
+    // Used to report staging creation failure only once per session (avoids spam).
+    bool present_staging_failure_logged{false};
 };
 
 } // namespace Vulkan

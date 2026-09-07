@@ -863,7 +863,15 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
     // match (a stale-size staging image hangs the driver on resize/fullscreen).
     if (instance.GetDriverID() == vk::DriverId::eNvidiaProprietary) {
         const auto [staging_w, staging_h] = swapchain.GetExtent();
-        if (present_staging &&
+        if (staging_w == 0 || staging_h == 0) {
+            // Swapchain is in a transient/invalid state (e.g. mid resize); skip the
+            // copy pass this frame instead of failing to create a 0-size image.
+            staging_size_valid = false;
+            present_staging_failure_logged = false;
+        } else {
+            staging_size_valid = true;
+        }
+        if (staging_size_valid && present_staging &&
             (present_staging_width != staging_w || present_staging_height != staging_h)) {
             // Wait for any in-flight present copy commands to finish before
             // destroying the stale-size staging image.
@@ -873,7 +881,7 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
             present_staging_width = 0;
             present_staging_height = 0;
         }
-        if (!present_staging) {
+        if (staging_size_valid && !present_staging) {
             const vk::Format format = swapchain.GetSurfaceFormat().format;
             const vk::ImageCreateInfo staging_ci{
                 .imageType = vk::ImageType::e2D,
@@ -888,7 +896,6 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
             VkImage unsafe_staging{};
             VkImageCreateInfo unsafe_staging_ci = static_cast<VkImageCreateInfo>(staging_ci);
             VmaAllocationCreateInfo alloc_info{
-                .flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT,
                 .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
             };
             const VkResult staging_result =
@@ -899,7 +906,11 @@ void Presenter::Present(Frame* frame, bool is_reusing_frame) {
                 present_staging_width = staging_w;
                 present_staging_height = staging_h;
                 SetObjectName(instance.GetDevice(), present_staging, "Present copy staging");
-            } else {
+                present_staging_failure_logged = false;
+                LOG_INFO(Render_Vulkan, "Present copy staging image {}x{} created", staging_w,
+                         staging_h);
+            } else if (!present_staging_failure_logged) {
+                present_staging_failure_logged = true;
                 LOG_ERROR(Render_Vulkan, "Failed to create present-copy staging image: {}",
                           vk::to_string(vk::Result{staging_result}));
             }
