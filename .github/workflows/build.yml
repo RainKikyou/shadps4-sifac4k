@@ -152,6 +152,11 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Setup Visual Studio shell (Windows only)
+      uses: egor-tensin/vs-shell@v2
+      with:
+        arch: x64
+
     - name: Cache CMake Configuration
       uses: actions/cache@v5
       env:
