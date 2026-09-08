@@ -33,7 +33,7 @@ using SceUsbdDeviceDescriptor = libusb_device_descriptor;
 using SceUsbdConfigDescriptor = libusb_config_descriptor;
 using SceUsbdTransfer = libusb_transfer;
 using SceUsbdControlSetup = libusb_control_setup;
-using SceUsbdTransferCallback = void PS4_SYSV_ABI (*)(SceUsbdTransfer* transfer);
+using SceUsbdTransferCallback = libusb_transfer_cb_fn;
 
 using SkylandersPortalBackend = SkylanderBackend;
 using InfinityBaseBackend = InfinityBackend;
