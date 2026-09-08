@@ -98,7 +98,7 @@ void LowerLdsSpillsToRegistersPass(IR::Program& program, const RuntimeInfo& runt
             }
             IR::Inst* prod = addr.Inst();
             if (prod->GetOpcode() != IR::Opcode::ShiftLeftLogical32 || prod->Arg(0).IsImmediate() ||
-                !prod->Arg(1).IsImmediate() ||prod->Arg(1).U32() != 2) {
+                !prod->Arg(1).IsImmediate() || prod->Arg(1).U32() != 2) {
                 continue;
             }
             IR::Inst* lane_id = prod->Arg(0).Inst();
@@ -159,8 +159,8 @@ static IR::Inst* FoldPhi(IR::Inst& phi, IR::Opcode opcode, IR::Type type, auto&&
 
     // Insert folded opcode after block phis
     auto it = std::ranges::find_if_not(block->Instructions(), IR::IsPhi);
-    IR::Value const replacement{&*block->PrependNewInst(it, opcode,
-                                                        {IR::Value{new_phi}, IR::Value{args}...})};
+    IR::Value const replacement{
+        &*block->PrependNewInst(it, opcode, {IR::Value{new_phi}, IR::Value{args}...})};
     phi.ReplaceUsesWithAndRemove(replacement);
     ASSERT(!insert_point->HasUses());
     block->Instructions().erase(insert_point);
@@ -289,7 +289,8 @@ void InverseBallotEliminationPass(IR::Program& program) {
             } else if (value.U64() == std::numeric_limits<u64>::max()) {
                 inst->ReplaceUsesWithAndRemove(IR::Value{true});
             } else {
-                UNREACHABLE_MSG("Unexpected immediate argument for InverseBallot {:#x}", value.U64());
+                UNREACHABLE_MSG("Unexpected immediate argument for InverseBallot {:#x}",
+                                value.U64());
             }
             continue;
         }
@@ -300,13 +301,11 @@ void InverseBallotEliminationPass(IR::Program& program) {
             continue;
         }
 
-
         if (prod->GetOpcode() != IR::Opcode::BitwiseAnd64 &&
             prod->GetOpcode() != IR::Opcode::BitwiseNot64 &&
             prod->GetOpcode() != IR::Opcode::BitwiseOr64 &&
             prod->GetOpcode() != IR::Opcode::BitwiseXor64 &&
-            prod->GetOpcode() != IR::Opcode::SelectU64 &&
-            prod->GetOpcode() != IR::Opcode::Phi) {
+            prod->GetOpcode() != IR::Opcode::SelectU64 && prod->GetOpcode() != IR::Opcode::Phi) {
             continue;
         }
 

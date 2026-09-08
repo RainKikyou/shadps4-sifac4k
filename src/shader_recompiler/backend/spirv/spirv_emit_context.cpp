@@ -474,7 +474,8 @@ void EmitContext::DefineInputs() {
                 DefineVariable(U32[3], spv::BuiltIn::LocalInvocationId, spv::StorageClass::Input);
         }
         if (info.loads.Get(IR::Attribute::LocalInvocationIndex)) {
-            local_invocation_index = DefineVariable(U32[1], spv::BuiltIn::LocalInvocationIndex, spv::StorageClass::Input);
+            local_invocation_index = DefineVariable(U32[1], spv::BuiltIn::LocalInvocationIndex,
+                                                    spv::StorageClass::Input);
         }
         break;
     case LogicalStage::Geometry: {
