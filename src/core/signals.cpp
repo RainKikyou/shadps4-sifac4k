@@ -26,6 +26,47 @@ namespace Core {
 
 #if defined(_WIN32)
 
+static void LogWindowsExceptionContext(EXCEPTION_POINTERS* pExp) noexcept {
+    if (pExp == nullptr || pExp->ExceptionRecord == nullptr || pExp->ContextRecord == nullptr) {
+        return;
+    }
+
+    const auto* record = pExp->ExceptionRecord;
+    const auto* context = pExp->ContextRecord;
+    const auto access_type = record->NumberParameters > 0 ? record->ExceptionInformation[0] : 0;
+    const auto fault_address = record->NumberParameters > 1 ? record->ExceptionInformation[1] : 0;
+
+    LOG_CRITICAL(Debug,
+                 "Windows exception context: access = {:#x}, fault = {:#x}, exception = {:#x}, "
+                 "thread = {}",
+                 access_type, fault_address, reinterpret_cast<u64>(record->ExceptionAddress),
+                 GetCurrentThreadId());
+
+#if defined(ARCH_X86_64)
+    LOG_CRITICAL(Debug,
+                 "Windows exception registers: rip = {:#x}, rsp = {:#x}, rcx = {:#x}, rdx = "
+                 "{:#x}, r8 = {:#x}, r9 = {:#x}",
+                 context->Rip, context->Rsp, context->Rcx, context->Rdx, context->R8, context->R9);
+
+    const auto stack_address = static_cast<uintptr_t>(context->Rsp);
+    for (u32 index = 0; index < 4; ++index) {
+        const auto address = stack_address + index * sizeof(u64);
+        MEMORY_BASIC_INFORMATION memory_info{};
+        const bool readable = VirtualQuery(reinterpret_cast<const void*>(address), &memory_info,
+                                           sizeof(memory_info)) == sizeof(memory_info) &&
+                              memory_info.State == MEM_COMMIT &&
+                              (memory_info.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0;
+        if (!readable) {
+            LOG_CRITICAL(Debug, "Windows exception stack[{:#x}] is unreadable at {:#x}", index,
+                         address);
+            break;
+        }
+        LOG_CRITICAL(Debug, "Windows exception stack[{:#x}] = {:#x}", index,
+                     *reinterpret_cast<const u64*>(address));
+    }
+#endif
+}
+
 static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
     using namespace Libraries::Kernel;
     const auto* signals = Signals::Instance();
@@ -142,6 +183,7 @@ static LONG WINAPI SignalHandler(EXCEPTION_POINTERS* pExp) noexcept {
                                       ? static_protection_exception
                                       : code != EXCEPTION_BREAKPOINT;
     if (report_unhandled) { // Windows static guest red-zone protection
+        LogWindowsExceptionContext(pExp);
         LOG_CRITICAL(Debug, "Unhandled Exception code {:#x} at {}", code, address);
         Common::Singleton<Core::Emulator>::Instance()->Shutdown();
     }
