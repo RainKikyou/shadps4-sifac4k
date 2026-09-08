@@ -37,7 +37,8 @@ extern "C" void PS4_SYSV_ABI _sceFiberSwitchEntry(OrbisFiberData* data,
 #if defined(_MSC_VER)
 extern "C" void PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) {
 #else
-extern "C" void __attribute__((used)) PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) {
+extern "C" void __attribute__((used)) PS4_SYSV_ABI _sceFiberForceQuit(u64 ret)
+    asm("_sceFiberForceQuit") {
 #endif
     OrbisFiberContext* g_ctx = GetFiberContext();
     g_ctx->return_val = ret;

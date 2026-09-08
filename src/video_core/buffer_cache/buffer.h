@@ -4,11 +4,11 @@
 #pragma once
 
 #include <cstddef>
+#include <cstring>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
-#include <cstring>
-#include <type_traits>
 #include "common/types.h"
 #include "core/memory.h"
 #include "video_core/amdgpu/resource.h"

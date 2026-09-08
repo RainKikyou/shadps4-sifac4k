@@ -278,8 +278,8 @@ static void AddPhiUsersToWorklist(IR::Inst& phi, std::vector<IR::Inst*>& worklis
 }
 
 static IR::Inst* FoldPhi(IR::Inst& phi, IR::Opcode opcode, IR::Type input_type,
-                         std::vector<IR::Inst*>& worklist,
-                         std::unordered_set<IR::Inst*>& queued, auto&&... args) {
+                         std::vector<IR::Inst*>& worklist, std::unordered_set<IR::Inst*>& queued,
+                         auto&&... args) {
     const IR::Type output_type = IR::TypeOf(opcode);
     if (opcode == IR::Opcode::Phi || !IsPhiType(input_type) || !IsPhiType(output_type) ||
         phi.Flags<IR::Type>() != output_type || phi.NumArgs() == 0) {
@@ -290,8 +290,7 @@ static IR::Inst* FoldPhi(IR::Inst& phi, IR::Opcode opcode, IR::Type input_type,
     producers.reserve(phi.NumArgs());
     for (size_t arg_index = 0; arg_index < phi.NumArgs(); ++arg_index) {
         IR::Inst* const producer = phi.Arg(arg_index).TryInst();
-        if (!IsValidPhiProducer(producer, opcode) ||
-            !IsValueOfType(producer->Arg(0), input_type)) {
+        if (!IsValidPhiProducer(producer, opcode) || !IsValueOfType(producer->Arg(0), input_type)) {
             return nullptr;
         }
         producers.push_back(producer);
@@ -317,7 +316,7 @@ static IR::Inst* FoldPhi(IR::Inst& phi, IR::Opcode opcode, IR::Type input_type,
 }
 
 static IR::Inst* FoldPhiArgOpIntoPhi(IR::Inst& phi, std::vector<IR::Inst*>& worklist,
-                                      std::unordered_set<IR::Inst*>& queued) {
+                                     std::unordered_set<IR::Inst*>& queued) {
     IR::Inst* const first_arg = phi.Arg(0).TryInst();
     if (!first_arg || !IsValidPhiProducer(first_arg, first_arg->GetOpcode())) {
         return nullptr;

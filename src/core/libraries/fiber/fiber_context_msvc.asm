@@ -1,3 +1,6 @@
+; SPDX-FileCopyrightText: Copyright 2026 shadPS4 Emulator Project
+; SPDX-License-Identifier: GPL-2.0-or-later
+
 .code
 
 EXTERN _sceFiberForceQuit:PROC
@@ -25,7 +28,7 @@ _sceFiberSetJmp PROC
     mov [r11+60h], r14
     mov [r11+68h], r15
     fnstcw word ptr [r11+70h]
-    stmxcsr dword ptr [r11+72h]
+    stmxcsr dword ptr [r11+74h]
     xor eax, eax
     ret
 _sceFiberSetJmp ENDP

@@ -94,8 +94,9 @@ struct PageManager::Impl {
 #endif
     inline static Vulkan::Rasterizer* rasterizer;
 #ifdef ENABLE_USERFAULTFD
-    Impl(Vulkan::Rasterizer* rasterizer_) : cached_pages(std::make_unique<PageState[]>(NUM_ADDRESS_PAGES)),
-                                            locks(std::make_unique<LockType[]>(NUM_ADDRESS_LOCKS)) {
+    Impl(Vulkan::Rasterizer* rasterizer_)
+        : cached_pages(std::make_unique<PageState[]>(NUM_ADDRESS_PAGES)),
+          locks(std::make_unique<LockType[]>(NUM_ADDRESS_LOCKS)) {
         rasterizer = rasterizer_;
         uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK | UFFD_USER_MODE_ONLY);
         ASSERT_MSG(uffd != -1, "{}", Common::GetLastErrorMsg());
