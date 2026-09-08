@@ -410,7 +410,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
             }
             case PM4ItOpcode::SetPredication: {
                 const auto* set_predication = reinterpret_cast<const PM4CmdSetPredication*>(header);
-                LOG_WARNING(Render, "Unimplemented IT_SET_PREDICATION pred_op = {}", magic_enum::enum_name(set_predication->pred_op));
+                LOG_WARNING(Render, "Unimplemented IT_SET_PREDICATION pred_op = {}",
+                            magic_enum::enum_name(set_predication->pred_op));
                 break;
             }
             case PM4ItOpcode::IndexType: {

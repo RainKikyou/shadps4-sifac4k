@@ -64,14 +64,15 @@ UniqueBuffer::UniqueBuffer(vk::Device device_, VmaAllocator allocator_)
 
 UniqueBuffer::~UniqueBuffer() {
     if (buffer) {
-        LOG_WARNING(Render, "Destroying buffer bda_addr={:#x}, {}", u64(bda_addr),  name);
+        LOG_WARNING(Render, "Destroying buffer bda_addr={:#x}, {}", u64(bda_addr), name);
         vmaDestroyBuffer(allocator, buffer, allocation);
     }
 }
 
 void UniqueBuffer::Create(const vk::BufferCreateInfo& buffer_ci, MemoryUsage usage,
                           VmaAllocationInfo* out_alloc_info, std::string name) {
-    const bool with_bda = /*bool(buffer_ci.usage & vk::BufferUsageFlagBits::eShaderDeviceAddress)*/true;
+    const bool with_bda =
+        /*bool(buffer_ci.usage & vk::BufferUsageFlagBits::eShaderDeviceAddress)*/ true;
     const VmaAllocationCreateFlags bda_flag =
         with_bda ? VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT : 0;
     const VmaAllocationCreateInfo alloc_ci = {
@@ -175,8 +176,7 @@ StreamBuffer::StreamBuffer(const Vulkan::Instance& instance, Vulkan::Scheduler& 
     ReserveWatches(current_watches, WATCHES_INITIAL_RESERVE);
     ReserveWatches(previous_watches, WATCHES_INITIAL_RESERVE);
     const auto device = instance.GetDevice();
-    const auto name = fmt::format("StreamBuffer({}):{:#x}", BufferTypeName(usage),
-                          size_bytes);
+    const auto name = fmt::format("StreamBuffer({}):{:#x}", BufferTypeName(usage), size_bytes);
     Vulkan::SetObjectName(device, Handle(), name);
     buffer.name = name;
 }

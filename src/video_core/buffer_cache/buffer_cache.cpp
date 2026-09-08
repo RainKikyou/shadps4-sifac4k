@@ -610,10 +610,12 @@ BufferId BufferCache::CreateBuffer(VAddr device_addr, u32 wanted_size) {
         slot_buffers.insert(instance, scheduler, MemoryUsage::DeviceLocal, overlap.begin,
                             AllFlags | vk::BufferUsageFlagBits::eShaderDeviceAddress, size);
     auto& new_buffer = slot_buffers[new_buffer_id];
-    LOG_WARNING(Render, "Creating buffer {:#x}:{:#x} bda_addr={:#x}", device_addr, wanted_size, u64(new_buffer.buffer.bda_addr));
+    LOG_WARNING(Render, "Creating buffer {:#x}:{:#x} bda_addr={:#x}", device_addr, wanted_size,
+                u64(new_buffer.buffer.bda_addr));
     for (const BufferId overlap_id : overlap.ids) {
         auto& overlap_buf = slot_buffers[overlap_id];
-        LOG_WARNING(Render, "Overlap buffer {:#x}:{:#x} bda_addr={:#x}", overlap_buf.cpu_addr, overlap_buf.size_bytes, u64(overlap_buf.buffer.bda_addr));
+        LOG_WARNING(Render, "Overlap buffer {:#x}:{:#x} bda_addr={:#x}", overlap_buf.cpu_addr,
+                    overlap_buf.size_bytes, u64(overlap_buf.buffer.bda_addr));
         JoinOverlap(new_buffer_id, overlap_id, !overlap.has_stream_leap);
     }
     Register(new_buffer_id);

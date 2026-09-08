@@ -1139,7 +1139,6 @@ struct PM4CmdDrawIndexIndirectCountMulti {
     u32 draw_initiator; ///< Draw Initiator Register
 };
 
-
 struct PM4CmdSetPredication {
     enum class PredicateOp : u32 {
         Clear = 0,
