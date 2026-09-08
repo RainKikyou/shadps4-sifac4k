@@ -34,12 +34,12 @@ extern "C" void PS4_SYSV_ABI _sceFiberSwitchEntry(OrbisFiberData* data,
                                                   bool set_fpu) asm("_sceFiberSwitchEntry");
 #endif
 
-#if defined(_MSC_VER)
-extern "C" void PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) {
-#else
-extern "C" void __attribute__((used)) PS4_SYSV_ABI _sceFiberForceQuit(u64 ret)
-    asm("_sceFiberForceQuit") {
+#if !defined(_MSC_VER)
+extern "C" void __attribute__((used)) PS4_SYSV_ABI
+_sceFiberForceQuit(u64 ret) asm("_sceFiberForceQuit");
 #endif
+
+extern "C" void PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) {
     OrbisFiberContext* g_ctx = GetFiberContext();
     g_ctx->return_val = ret;
     _sceFiberLongJmp(g_ctx);

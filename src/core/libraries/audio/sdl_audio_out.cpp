@@ -536,8 +536,10 @@ private:
             __m128i s16_vals = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&s[i]));
 
             // Convert to 32-bit integers
-            __m128i s32_lo = _mm_cvtepi16_epi32(s16_vals);
-            __m128i s32_hi = _mm_cvtepi16_epi32(_mm_srli_si128(s16_vals, 8));
+            __m128i sign = _mm_srai_epi16(s16_vals, 15);
+            __m128i s32_lo = _mm_unpacklo_epi16(s16_vals, sign);
+            __m128i s32_hi =
+                _mm_unpacklo_epi16(_mm_srli_si128(s16_vals, 8), _mm_srli_si128(sign, 8));
 
             // Convert to float and scale
             __m128 f_lo = _mm_mul_ps(_mm_cvtepi32_ps(s32_lo), scale);
@@ -579,8 +581,8 @@ private:
             __m128i s16_vals = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&s[i]));
             __m128i sign = _mm_srai_epi16(s16_vals, 15);
             __m128i s32_lo = _mm_unpacklo_epi16(s16_vals, sign);
-            __m128i s32_hi = _mm_unpacklo_epi16(_mm_srli_si128(s16_vals, 8),
-                                                _mm_srli_si128(sign, 8));
+            __m128i s32_hi =
+                _mm_unpacklo_epi16(_mm_srli_si128(s16_vals, 8), _mm_srli_si128(sign, 8));
             __m128 f_lo = _mm_mul_ps(_mm_cvtepi32_ps(s32_lo), scale);
             __m128 f_hi = _mm_mul_ps(_mm_cvtepi32_ps(s32_hi), scale);
             _mm_storeu_ps(&d[i], f_lo);
