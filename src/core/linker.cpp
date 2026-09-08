@@ -38,8 +38,15 @@ static PS4_SYSV_ABI void ProgramExitFunc() {
     LOG_ERROR(Core_Linker, "Exit function called");
 }
 
+#if defined(ARCH_X86_64) && defined(_MSC_VER)
+extern "C" void RunMainEntryWindows(EntryParams*, ExitFunc);
+#endif
+
 static PS4_SYSV_ABI void* RunMainEntry [[noreturn]] (EntryParams* params) {
-#ifdef ARCH_X86_64
+#if defined(ARCH_X86_64) && defined(_MSC_VER)
+    RunMainEntryWindows(params, ProgramExitFunc);
+    UNREACHABLE();
+#elif defined(ARCH_X86_64)
     // Start shared library modules
     asm volatile("andq $-16, %%rsp\n" // Align to 16 bytes
                  "subq $8, %%rsp\n"   // videoout_basic expects the stack to be misaligned
@@ -60,7 +67,7 @@ static PS4_SYSV_ABI void* RunMainEntry [[noreturn]] (EntryParams* params) {
                  : "rax", "rsi", "rdi");
     UNREACHABLE();
 #else
-    UNREACHABLE_MSG("RunMainEntry unimplemented for current architecture.");
+    UNREACHABLE_MSG("RunMainEntry is unimplemented for the current architecture.");
 #endif
 }
 

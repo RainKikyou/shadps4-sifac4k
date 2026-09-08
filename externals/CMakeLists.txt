@@ -185,7 +185,6 @@ endif()
 # Dear ImGui
 add_library(Dear_ImGui
         imgui/imgui.cpp
-        imgui/imgui_demo.cpp
         imgui/imgui_draw.cpp
         imgui/imgui_internal.h
         imgui/imgui_tables.cpp

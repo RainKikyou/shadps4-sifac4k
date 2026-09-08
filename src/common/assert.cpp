@@ -5,7 +5,9 @@
 #include "common/assert.h"
 #include "core/signals.h"
 
-#if defined(ARCH_X86_64)
+#if defined(_MSC_VER)
+#define Crash() __debugbreak()
+#elif defined(ARCH_X86_64)
 #define Crash() __asm__ __volatile__("int $3")
 #elif defined(ARCH_ARM64)
 #define Crash() __asm__ __volatile__("brk 0")

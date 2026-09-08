@@ -23,16 +23,26 @@ OrbisFiberContext* GetFiberContext() {
     return Core::GetTcbBase()->tcb_fiber;
 }
 
+#if defined(_MSC_VER)
+extern "C" s32 PS4_SYSV_ABI _sceFiberSetJmp(OrbisFiberContext* ctx);
+extern "C" s32 PS4_SYSV_ABI _sceFiberLongJmp(OrbisFiberContext* ctx);
+extern "C" void PS4_SYSV_ABI _sceFiberSwitchEntry(OrbisFiberData* data, bool set_fpu);
+#else
 extern "C" s32 PS4_SYSV_ABI _sceFiberSetJmp(OrbisFiberContext* ctx) asm("_sceFiberSetJmp");
 extern "C" s32 PS4_SYSV_ABI _sceFiberLongJmp(OrbisFiberContext* ctx) asm("_sceFiberLongJmp");
 extern "C" void PS4_SYSV_ABI _sceFiberSwitchEntry(OrbisFiberData* data,
                                                   bool set_fpu) asm("_sceFiberSwitchEntry");
-extern "C" void PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) asm("_sceFiberForceQuit");
+#endif
 
+#if defined(_MSC_VER)
+extern "C" void PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) {
+#else
 extern "C" void __attribute__((used)) PS4_SYSV_ABI _sceFiberForceQuit(u64 ret) {
+#endif
     OrbisFiberContext* g_ctx = GetFiberContext();
     g_ctx->return_val = ret;
     _sceFiberLongJmp(g_ctx);
+    UNREACHABLE();
 }
 
 void PS4_SYSV_ABI _sceFiberCheckStackOverflow(OrbisFiberContext* ctx) {
@@ -84,7 +94,7 @@ void PS4_SYSV_ABI _sceFiberSwitchToFiber(OrbisFiber* fiber, u64 arg_on_run_to,
     if (fiber_ctx) {
         ctx->arg_on_run_to = arg_on_run_to;
         _sceFiberLongJmp(fiber_ctx);
-        __builtin_trap();
+        UNREACHABLE();
     }
 
     OrbisFiberData data{};
@@ -108,7 +118,7 @@ void PS4_SYSV_ABI _sceFiberSwitchToFiber(OrbisFiber* fiber, u64 arg_on_run_to,
         _sceFiberSwitchEntry(&data, false);
     }
 
-    __builtin_trap();
+    UNREACHABLE();
 }
 
 void PS4_SYSV_ABI _sceFiberSwitch(OrbisFiber* cur_fiber, OrbisFiber* fiber, u64 arg_on_run_to,
@@ -134,17 +144,17 @@ void PS4_SYSV_ABI _sceFiberSwitch(OrbisFiber* cur_fiber, OrbisFiber* fiber, u64 
             _sceFiberSwitchEntry(&data, false);
         }
 
-        __builtin_trap();
+        UNREACHABLE();
     }
 
     _sceFiberSwitchToFiber(fiber, arg_on_run_to, ctx);
-    __builtin_trap();
+    UNREACHABLE();
 }
 
 void PS4_SYSV_ABI _sceFiberTerminate(OrbisFiber* fiber, u64 arg_on_return, OrbisFiberContext* ctx) {
     ctx->arg_on_return = arg_on_return;
     _sceFiberLongJmp(ctx);
-    __builtin_trap();
+    UNREACHABLE();
 }
 
 s32 PS4_SYSV_ABI sceFiberInitializeImpl(OrbisFiber* fiber, const char* name, OrbisFiberEntry entry,
@@ -298,7 +308,7 @@ s32 PS4_SYSV_ABI sceFiberRunImpl(OrbisFiber* fiber, void* addr_context, u64 size
     if (!jmp) {
         if (fiber->addr_context) {
             _sceFiberSwitchToFiber(fiber, arg_on_run_to, &ctx);
-            __builtin_trap();
+            UNREACHABLE();
         }
 
         OrbisFiberData data{};
@@ -366,7 +376,7 @@ s32 PS4_SYSV_ABI sceFiberSwitchImpl(OrbisFiber* fiber, void* addr_context, u64 s
     OrbisFiber* cur_fiber = g_ctx->current_fiber;
     if (cur_fiber->addr_context == nullptr) {
         _sceFiberSwitch(cur_fiber, fiber, arg_on_run_to, g_ctx);
-        __builtin_trap();
+        UNREACHABLE();
     }
 
     OrbisFiberContext ctx{};
@@ -375,7 +385,7 @@ s32 PS4_SYSV_ABI sceFiberSwitchImpl(OrbisFiber* fiber, void* addr_context, u64 s
         cur_fiber->context = &ctx;
         _sceFiberCheckStackOverflow(g_ctx);
         _sceFiberSwitch(cur_fiber, fiber, arg_on_run_to, g_ctx);
-        __builtin_trap();
+        UNREACHABLE();
     }
 
     g_ctx = GetFiberContext();
@@ -432,7 +442,7 @@ s32 PS4_SYSV_ABI sceFiberReturnToThread(u64 arg_on_return, u64* arg_on_run) {
     }
 
     _sceFiberTerminate(cur_fiber, arg_on_return, g_ctx);
-    __builtin_trap();
+    UNREACHABLE();
 }
 
 s32 PS4_SYSV_ABI sceFiberGetInfo(OrbisFiber* fiber, OrbisFiberInfo* fiber_info) {

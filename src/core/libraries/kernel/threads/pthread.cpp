@@ -20,8 +20,12 @@
 #include "core/memory.h"
 
 #if defined(ARCH_X86_64) || defined(__arm64__) || defined(__aarch64__)
+#if defined(_MSC_VER)
+extern "C" void* PS4_SYSV_ABI _runOnAnotherStack(void* arg, void* func, void* stackb);
+#else
 extern "C" void* PS4_SYSV_ABI _runOnAnotherStack(void* arg, void* func,
                                                  void* stackb) asm("_runOnAnotherStack");
+#endif
 #else
 void* PS4_SYSV_ABI _runOnAnotherStack(void* arg, void* func, void* stackb) {
     UNREACHABLE_MSG("_runOnAnotherStack not implemented on target architecture.");
@@ -249,7 +253,7 @@ void UnblockPthreadCancelSignal();
 } // namespace
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 static DWORD RunThread(void* arg) {
 #else
 static void* RunThread(void* arg) {
@@ -266,7 +270,7 @@ static void* RunThread(void* arg) {
     UnblockPthreadCancelSignal();
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
     std::set_terminate(Common::Log::Terminate);
 #endif
 
@@ -279,7 +283,7 @@ static void* RunThread(void* arg) {
     /* Remove thread from tracking */
     DebugState.RemoveCurrentThreadFromGuestList();
     posix_pthread_exit(ret);
-#ifdef WIN32
+#ifdef _WIN32
     return 0;
 #else
     return nullptr;

@@ -91,13 +91,21 @@ EmitContext::~EmitContext() = default;
 
 Id EmitContext::Def(const IR::Value& value) {
     if (!value.IsImmediate()) {
-        return value.Inst()->Definition<Id>();
+        const IR::Inst* const inst = value.TryInst();
+        if (!inst) {
+            UNREACHABLE_MSG("Invalid opaque value");
+        }
+        return inst->Definition<Id>();
     }
     switch (value.Type()) {
     case IR::Type::Void:
         return Id{};
     case IR::Type::U1:
         return value.U1() ? true_value : false_value;
+    case IR::Type::U8:
+        return Constant(U8, value.U8());
+    case IR::Type::U16:
+        return Constant(U16, value.U16());
     case IR::Type::U32:
         return ConstU32(value.U32());
     case IR::Type::U64:

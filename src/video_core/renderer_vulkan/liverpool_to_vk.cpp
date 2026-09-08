@@ -758,7 +758,7 @@ static size_t GetSurfaceFormatTableIndex(AmdGpu::DataFormat data_format,
     return result;
 }
 
-static auto surface_format_table = []() constexpr {
+static auto surface_format_table = [] {
     std::array<vk::Format, 1 << amd_gpu_data_format_bit_size * 1 << amd_gpu_number_format_bit_size>
         result;
     for (auto& entry : result) {

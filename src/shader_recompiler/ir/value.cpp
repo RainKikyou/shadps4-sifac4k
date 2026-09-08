@@ -10,18 +10,20 @@
 namespace Shader::IR {
 
 bool Value::IsPhi() const noexcept {
-    return type == Type::Opaque && inst->GetOpcode() == Opcode::Phi;
+    return type == Type::Opaque && inst != nullptr && inst->GetOpcode() == Opcode::Phi;
 }
 
 IR::Type Value::Type() const noexcept {
-    if (IsPhi()) {
-        // The type of a phi node is stored in its flags
+    if (type != Type::Opaque) {
+        return type;
+    }
+    if (!inst) {
+        return Type::Opaque;
+    }
+    if (inst->GetOpcode() == Opcode::Phi) {
         return inst->Flags<IR::Type>();
     }
-    if (type == Type::Opaque) {
-        return inst->Type();
-    }
-    return type;
+    return inst->Type();
 }
 
 bool Value::operator==(const Value& other) const {
@@ -96,7 +98,7 @@ std::size_t hash<Shader::IR::Value>::operator()(const Shader::IR::Value& v) cons
     case Type::Attribute:
         return HashCombine(static_cast<u64>(v.attribute), h);
     case Type::U1:
-        return HashCombine(static_cast<u64>(v.attribute), h);
+        return HashCombine(static_cast<u64>(v.imm_u1), h);
     case Type::U8:
         return HashCombine(static_cast<u64>(v.imm_u8), h);
     case Type::U16:

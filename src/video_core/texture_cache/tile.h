@@ -292,7 +292,7 @@ constexpr auto hw_pipe_interleave = 256u;
 constexpr std::pair<u32, u32> GetMacroTileExtents(AmdGpu::TileMode tile_mode, u32 bpp,
                                                   u32 num_samples, bool alt) {
     ASSERT(num_samples <= 8);
-    const auto samples_log = static_cast<u32>(std::log2(num_samples));
+    const auto samples_log = std::bit_width(num_samples) - 1;
     const auto row = u32(tile_mode) * 5;
     const auto column = std::bit_width(bpp) - 4; // bpps are 8, 16, 32, 64, 128
     return (alt ? macro_tile_extents_alt : macro_tile_extents)[samples_log][row + column];

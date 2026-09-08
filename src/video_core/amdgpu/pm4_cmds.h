@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <bit>
 #include <cstring>
+#include <type_traits>
 #include "common/assert.h"
 #include "common/bit_field.h"
 #include "common/types.h"
@@ -276,13 +278,23 @@ struct PM4CmdStrmoutBufferUpdate {
     template <typename T = u64>
     T DstAddress() const {
         ASSERT(update_memory.Value() == 1);
-        return reinterpret_cast<T>(dst_address_lo.Value() | u64(dst_address_hi & 0xFFFF) << 32);
+        const u64 address = dst_address_lo.Value() | u64(dst_address_hi & 0xFFFF) << 32;
+        if constexpr (std::is_pointer_v<T>) {
+            return std::bit_cast<T>(address);
+        } else {
+            return static_cast<T>(address);
+        }
     }
 
     template <typename T = u64>
     T SrcAddress() const {
         ASSERT(source_select.Value() == SourceSelect::SrcAddress);
-        return reinterpret_cast<T>(src_address_lo.Value() | u64(src_address_hi & 0xFFFF) << 32);
+        const u64 address = src_address_lo.Value() | u64(src_address_hi & 0xFFFF) << 32;
+        if constexpr (std::is_pointer_v<T>) {
+            return std::bit_cast<T>(address);
+        } else {
+            return static_cast<T>(address);
+        }
     }
 };
 
@@ -454,7 +466,7 @@ struct PM4CmdEventWriteEop {
 
     template <typename T>
     T* Address() const {
-        return reinterpret_cast<T*>(address_lo | u64(address_hi) << 32);
+        return std::bit_cast<T*>(address_lo | u64(address_hi) << 32);
     }
 
     u32 DataDWord() const {
@@ -743,7 +755,12 @@ struct PM4CmdWriteData {
 
     template <typename T>
     T Address() const {
-        return reinterpret_cast<T>(addr64);
+        const u64 address = addr64;
+        if constexpr (std::is_pointer_v<T>) {
+            return std::bit_cast<T>(address);
+        } else {
+            return static_cast<T>(address);
+        }
     }
 };
 
@@ -774,7 +791,12 @@ struct PM4CmdEventWriteEos {
 
     template <typename T = u32*>
     T Address() const {
-        return reinterpret_cast<T>(address_lo | u64(address_hi) << 32);
+        const u64 address = address_lo | u64(address_hi) << 32;
+        if constexpr (std::is_pointer_v<T>) {
+            return std::bit_cast<T>(address);
+        } else {
+            return static_cast<T>(address);
+        }
     }
 
     u32 DataDWord() const {
@@ -833,7 +855,12 @@ struct PM4DumpConstRam {
 
     template <typename T>
     T Address() const {
-        return reinterpret_cast<T>((u64(addr_hi) << 32u) | addr_lo);
+        const u64 address = (u64(addr_hi) << 32u) | addr_lo;
+        if constexpr (std::is_pointer_v<T>) {
+            return std::bit_cast<T>(address);
+        } else {
+            return static_cast<T>(address);
+        }
     }
 
     [[nodiscard]] u32 Offset() const {
@@ -885,7 +912,7 @@ struct PM4CmdIndirectBuffer {
 
     template <typename T>
     T* Address() const {
-        return reinterpret_cast<T*>((u64(ibase_hi) << 32u) | ibase_lo);
+        return std::bit_cast<T*>((u64(ibase_hi) << 32u) | ibase_lo);
     }
 };
 
@@ -999,7 +1026,12 @@ struct PM4CmdSetBase {
     T Address() const {
         ASSERT(base_index == BaseIndex::DisplayListPatchTable ||
                base_index == BaseIndex::DrawIndexIndirPatchTable);
-        return reinterpret_cast<T>(address0 | (u64(address1 & 0xffff) << 32u));
+        const u64 address = address0 | (u64(address1 & 0xffff) << 32u);
+        if constexpr (std::is_pointer_v<T>) {
+            return std::bit_cast<T>(address);
+        } else {
+            return static_cast<T>(address);
+        }
     }
 };
 

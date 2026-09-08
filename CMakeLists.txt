@@ -59,9 +59,13 @@ else()
     message(FATAL_ERROR "Unsupported CPU architecture: ${BASE_ARCHITECTURE}")
 endif()
 
-if (ARCHITECTURE STREQUAL "x86_64")
-    # Target x86-64-v3 CPU architecture as this is a good balance between supporting performance critical
-    # instructions like AVX2 and maintaining support for older CPUs.
+if (MSVC AND ARCHITECTURE STREQUAL "x86_64")
+    enable_language(ASM_MASM)
+endif()
+
+if (MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/EHsc> $<$<COMPILE_LANGUAGE:CXX>:/bigobj>)
+elseif (ARCHITECTURE STREQUAL "x86_64")
     add_compile_options(-march=x86-64-v3)
 endif()
 
@@ -367,7 +371,11 @@ set(KERNEL_LIB src/core/libraries/kernel/coredump/coredump.cpp
 )
 
 if (ARCHITECTURE STREQUAL "x86_64" OR ARCHITECTURE STREQUAL "arm64")
-    list(APPEND KERNEL_LIB src/core/libraries/kernel/threads/stack_asm.cpp)
+    if (MSVC AND ARCHITECTURE STREQUAL "x86_64")
+        list(APPEND KERNEL_LIB src/core/libraries/kernel/threads/stack_asm_msvc.asm)
+    else()
+        list(APPEND KERNEL_LIB src/core/libraries/kernel/threads/stack_asm.cpp)
+    endif()
 endif()
 
 set(NETWORK_LIBS src/core/libraries/network/http.cpp
@@ -611,11 +619,23 @@ set(USBD_LIB src/core/libraries/usbd/usbd.cpp
              src/core/libraries/usbd/emulated/skylander.h
 )
 
-set(FIBER_LIB src/core/libraries/fiber/fiber_context.cpp
-              src/core/libraries/fiber/fiber.cpp
-              src/core/libraries/fiber/fiber.h
-              src/core/libraries/fiber/fiber_error.h
-)
+if (MSVC AND ARCHITECTURE STREQUAL "x86_64")
+    set(FIBER_LIB src/core/libraries/fiber/fiber_context_msvc.asm
+                  src/core/libraries/fiber/fiber.cpp
+                  src/core/libraries/fiber/fiber.h
+                  src/core/libraries/fiber/fiber_error.h
+    )
+    set_source_files_properties(
+        src/core/libraries/fiber/fiber_context_msvc.asm
+        PROPERTIES VS_SETTINGS "ObjectFileName=$(IntDir)fiber_context_msvc.obj"
+    )
+else()
+    set(FIBER_LIB src/core/libraries/fiber/fiber_context.cpp
+                  src/core/libraries/fiber/fiber.cpp
+                  src/core/libraries/fiber/fiber.h
+                  src/core/libraries/fiber/fiber_error.h
+    )
+endif()
 
 set(VDEC_LIB src/core/libraries/videodec/video_utils.cpp
              src/core/libraries/videodec/video_utils.h
@@ -959,6 +979,14 @@ if (ARCHITECTURE STREQUAL "x86_64")
              src/core/cpu_patches.cpp
              src/core/cpu_patches.h
              ${FIBER_LIB})
+    if (MSVC)
+        list(APPEND CORE src/core/linker_entry_msvc.asm)
+        set_source_files_properties(
+            src/core/libraries/kernel/threads/stack_asm_msvc.asm
+            src/core/linker_entry_msvc.asm
+            PROPERTIES VS_SETTINGS "ObjectFileName=$(IntDir)%(Filename).obj"
+        )
+    endif()
 endif()
 
 set(SHADER_RECOMPILER src/shader_recompiler/profile.h

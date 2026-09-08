@@ -5,8 +5,14 @@
 #include "common/arch.h"
 #include "core/libraries/kernel/threads/pthread.h"
 #include "thread.h"
+#ifdef ARCH_X86_64
+#include <xmmintrin.h>
+#endif
 #ifdef _WIN64
 #include <windows.h>
+#ifdef _MSC_VER
+#include <float.h>
+#endif
 #include "common/ntapi.h"
 #else
 #include <csignal>
@@ -68,7 +74,12 @@ void NativeThread::Initialize() {
 #ifdef ARCH_X86_64
     // Set MXCSR and FPUCW registers to the values used by Orbis.
     _mm_setcsr(ORBIS_MXCSR);
+#ifdef _MSC_VER
+    unsigned int fpu_cw = ORBIS_FPUCW;
+    _control87(fpu_cw, _MCW_PC | _MCW_RC);
+#else
     asm volatile("fldcw %0" : : "m"(ORBIS_FPUCW));
+#endif
 #endif
 #if _WIN64
     tid = GetCurrentThreadId();
