@@ -755,7 +755,7 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
     // 4K toggle (CUSA15006): report the guest output buffer as 3840x2160 only
     // when "Force 4K Game Res" is enabled; the buffer is still read at its real
     // layout so forcing the attribute is not needed (and would corrupt the image).
-    DebugState.game_resolution = EmulatorSettings.IsForce4KResolutionEnabled()
+    DebugState.game_resolution = EmulatorSettings.IsForce4KResolution()
                                      ? std::pair<u32, u32>{3840u, 2160u}
                                      : std::pair<u32, u32>{image_size.width, image_size.height};
     DebugState.output_resolution = {frame->width, frame->height};

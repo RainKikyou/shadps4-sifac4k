@@ -58,7 +58,7 @@ void SettingsWindow::LoadSettings(std::string profile) {
     fsrEnabledSetting = EmulatorSettings.IsFsrEnabled();
     rcasEnabledSetting = EmulatorSettings.IsRcasEnabled();
     rcasAttenuationSetting = static_cast<float>(EmulatorSettings.GetRcasAttenuation() * 0.001f);
-    force4KResolutionSetting = EmulatorSettings.IsForce4KResolutionEnabled();
+    force4KResolutionSetting = EmulatorSettings.IsForce4KResolution();
     forceFsrEnabledSetting = EmulatorSettings.IsForceFsrEnabled();
 
     /////////// Input Tab
@@ -122,7 +122,7 @@ void SettingsWindow::SaveSettings(std::string profile) {
     EmulatorSettings.SetWindowWidth(windowWidthSetting, isSpecific);
     EmulatorSettings.SetHdrAllowed(hdrAllowedSetting, isSpecific);
     EmulatorSettings.SetFsrEnabled(fsrEnabledSetting, isSpecific);
-    EmulatorSettings.SetForce4KResolutionEnabled(force4KResolutionSetting, isSpecific);
+    EmulatorSettings.SetForce4KResolution(force4KResolutionSetting, isSpecific);
     EmulatorSettings.SetForceFsrEnabled(forceFsrEnabledSetting, isSpecific);
     EmulatorSettings.SetRcasEnabled(rcasEnabledSetting, isSpecific);
     EmulatorSettings.SetRcasAttenuation(static_cast<int>(rcasAttenuationSetting * 1000),

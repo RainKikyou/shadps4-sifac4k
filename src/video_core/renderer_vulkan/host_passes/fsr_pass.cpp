@@ -143,8 +143,8 @@ vk::ImageView FsrPass::Render(vk::CommandBuffer cmdbuf, vk::ImageView input,
         DebugState.is_using_fsr = false;
         return input;
     }
-    if (!settings.force && (input_size.width >= output_size.width &&
-                            input_size.height >= output_size.height)) {
+    if (!settings.force &&
+        (input_size.width >= output_size.width && input_size.height >= output_size.height)) {
         DebugState.is_using_fsr = false;
         return input;
     }
