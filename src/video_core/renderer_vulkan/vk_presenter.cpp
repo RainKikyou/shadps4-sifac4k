@@ -749,7 +749,10 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         attribute.attrib.pixel_format == Libraries::VideoOut::PixelFormat::A2R10G10B10Srgb;
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
 
-    DebugState.game_resolution = {image_size.width, image_size.height};
+    // 4K override (CUSA15006): report the guest output buffer as 3840x2160 while
+    // reading it at its real layout, so the "Game Res" debug info shows 4K
+    // without the pitch/garbage artifacts of forcing the attribute itself.
+    DebugState.game_resolution = {3840u, 2160u};
     DebugState.output_resolution = {frame->width, frame->height};
 
     std::shared_ptr<std::vector<ScreenshotReadback>> deferred_screenshots{};
