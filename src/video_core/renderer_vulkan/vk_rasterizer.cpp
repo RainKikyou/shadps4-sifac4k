@@ -1152,6 +1152,16 @@ void Rasterizer::UpdateDynamicState(const GraphicsPipeline* pipeline, const bool
 void Rasterizer::UpdateViewportScissorState() const {
     const auto& regs = liverpool->regs;
 
+    // Force 4K (CUSA15006): when the bound render target was promoted to 3840x2160 by the
+    // liverpool hint override, scale the guest viewport/scissor by 2x so draws cover the
+    // full target. Mid targets (960x540 etc.) keep base size and are left untouched.
+    const float rt_scale =
+        EmulatorSettings.IsForce4KResolution() &&
+                scheduler.GetRenderState().width >= 3072 &&
+                scheduler.GetRenderState().height >= 1920
+            ? 2.0f
+            : 1.0f;
+
     const auto combined_scissor_value_tl = [](s16 scr, s16 win, s16 gen, s16 win_offset) {
         return std::max({scr, s16(win + win_offset), s16(gen + win_offset)});
     };
@@ -1238,6 +1248,12 @@ void Rasterizer::UpdateViewportScissorState() const {
             viewport.height = yscale * 2.0f;
         }
 
+        if (rt_scale != 1.0f) {
+            viewport.x *= rt_scale;
+            viewport.y *= rt_scale;
+            viewport.width *= rt_scale;
+            viewport.height *= rt_scale;
+        }
         viewports.push_back(viewport);
 
         auto vp_scsr = scsr;
@@ -1251,9 +1267,21 @@ void Rasterizer::UpdateViewportScissorState() const {
             vp_scsr.bottom_right_y = std::min(AmdGpu::Scissor::Clamp(vp_scsr.bottom_right_y),
                                               regs.viewport_scissors[i].bottom_right_y);
         }
+        const auto sc_tl_x = static_cast<s16>(
+            rt_scale != 1.0f ? static_cast<float>(vp_scsr.top_left_x) * rt_scale
+                             : vp_scsr.top_left_x);
+        const auto sc_tl_y = static_cast<s16>(
+            rt_scale != 1.0f ? static_cast<float>(vp_scsr.top_left_y) * rt_scale
+                             : vp_scsr.top_left_y);
+        const auto sc_w = static_cast<u16>(
+            rt_scale != 1.0f ? static_cast<float>(vp_scsr.GetWidth()) * rt_scale
+                             : vp_scsr.GetWidth());
+        const auto sc_h = static_cast<u16>(
+            rt_scale != 1.0f ? static_cast<float>(vp_scsr.GetHeight()) * rt_scale
+                             : vp_scsr.GetHeight());
         scissors.push_back({
-            .offset = {vp_scsr.top_left_x, vp_scsr.top_left_y},
-            .extent = {vp_scsr.GetWidth(), vp_scsr.GetHeight()},
+            .offset = {sc_tl_x, sc_tl_y},
+            .extent = {sc_w, sc_h},
         });
     }
 

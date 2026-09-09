@@ -346,14 +346,14 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                         ASSERT_MSG(payload[nop_offset] == 0xc0001000,
                                    "NOP hint is missing in CB setup sequence");
                         last_cb_extent[col_buf_id].raw = payload[nop_offset + 1];
-                        // TODO(4k): temporary diagnostic for render-target sizing
-                        const uintptr_t hint_host_addr =
-                            reinterpret_cast<uintptr_t>(&payload[nop_offset + 1]);
-                        LOG_INFO(Lib_GnmDriver,
-                                 "[4k-diag] CB{} hint: extent={}x{} raw={:#x} payload-addr={:#x}",
-                                 col_buf_id, last_cb_extent[col_buf_id].width,
-                                 last_cb_extent[col_buf_id].height, last_cb_extent[col_buf_id].raw,
-                                 hint_host_addr);
+                        // Force 4K (CUSA15006): promote only the main 1080p render target
+                        // to 3840x2160. Mid targets (960x540/512x360/...) are left untouched.
+                        if (EmulatorSettings.IsForce4KResolution()) {
+                            auto& he = last_cb_extent[col_buf_id];
+                            if (he.width == 1920 && he.height == 1080) {
+                                he.raw = 0x000f000070080000u; // 3840x2160 packed
+                            }
+                        }
                     } else {
                         last_cb_extent[col_buf_id].raw = 0;
                     }
@@ -385,6 +385,11 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                         ASSERT_MSG(payload[20] == 0xc0001000,
                                    "NOP hint is missing in DB setup sequence");
                         last_db_extent.raw = payload[21];
+                        if (EmulatorSettings.IsForce4KResolution()) {
+                            if (last_db_extent.width == 1920 && last_db_extent.height == 1080) {
+                                last_db_extent.raw = 0x000f000070080000u; // 3840x2160
+                            }
+                        }
                     } else {
                         last_db_extent.raw = 0;
                     }
