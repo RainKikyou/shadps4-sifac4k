@@ -126,12 +126,11 @@ void Rasterizer::PrepareRenderState(const GraphicsPipeline* pipeline) {
             continue;
         }
         auto hint = liverpool->last_cb_extent[cb];
-        // SIFAC 4K: Force flip buffer (1920x1080) and UI RT (960x540) to 3840x2160
-        // Must match viewport/scissor/pushdata scaling in UpdateViewportScissorState
+        // SIFAC 4K: Force flip buffer RT (1920x1080) to 3840x2160
+        // Do NOT force UI RT (960x540) - UI renders at native resolution and gets stretched during compositing
         if (MemoryPatcher::g_game_serial == "CUSA24620" || MemoryPatcher::g_game_serial == "CUSA24619") {
-            if ((hint.width == 1920 && hint.height == 1080) ||
-                (hint.width == 960 && hint.height == 540)) {
-                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing RT {}x{} -> 3840x2160", hint.width, hint.height);
+            if (hint.width == 1920 && hint.height == 1080) {
+                LOG_INFO(Render_Vulkan, "SIFAC 4K: Forcing flip buffer RT 1920x1080 -> 3840x2160");
                 hint.width = 3840;
                 hint.height = 2160;
             }
