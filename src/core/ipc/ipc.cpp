@@ -172,6 +172,17 @@ void IPC::InputLoop() {
                 presenter->GetFsrSettingsRef().rcas_attenuation =
                     static_cast<float>(value / 1000.0f);
             }
+        } else if (cmd == "SET_FORCE_4K") {
+            bool force_4k = next_u64() != 0;
+            EmulatorSettings.SetForce4KResolution(force_4k);
+            // DebugState.game_resolution is resolved from EmulatorSettings on
+            // every frame, so the change becomes visible immediately.
+        } else if (cmd == "SET_FORCE_FSR") {
+            bool force_fsr = next_u64() != 0;
+            EmulatorSettings.SetForceFsrEnabled(force_fsr);
+            if (presenter) {
+                presenter->GetFsrSettingsRef().force = force_fsr;
+            }
         } else if (cmd == "USB_LOAD_FIGURE") {
             const auto ref = Libraries::Usbd::usb_backend->GetImplRef();
             if (ref) {
