@@ -6,6 +6,7 @@
 #include "core/emulator_settings.h"
 #include "video_core/renderdoc.h"
 
+#include <array>
 #include <atomic>
 #include <renderdoc_app.h>
 
@@ -84,9 +85,17 @@ void LoadRenderDoc() {
     }
 #endif
     if (rdoc_api) {
-        // Disable default capture keys as they suppose to trigger present-to-present capturing
-        // and it is not what we want
-        rdoc_api->SetCaptureKeys(nullptr, 0);
+        // Restore the default RenderDoc capture hotkeys (F12/PrtScr) instead of
+        // clearing them. Clearing them made manual/external frame capture
+        // impossible; the default keys let us grab a frame directly even when
+        // the emulator's own input layer is not routing keyboard events.
+        // Note: keys==nullptr disables capture keys, so explicitly restore the
+        // default F12/PrtScrn capture buttons.
+        constexpr std::array<RENDERDOC_InputButton, 2> capture_keys{
+            eRENDERDOC_Key_F12, eRENDERDOC_Key_PrtScrn,
+        };
+        rdoc_api->SetCaptureKeys(const_cast<RENDERDOC_InputButton*>(capture_keys.data()),
+                                 static_cast<int>(capture_keys.size()));
 
         // Also remove rdoc crash handler
         rdoc_api->UnloadCrashHandler();
