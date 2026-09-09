@@ -22,6 +22,11 @@ static std::unique_ptr<VideoOutDriver> driver;
 void PS4_SYSV_ABI sceVideoOutSetBufferAttribute(BufferAttribute* attribute, PixelFormat pixelFormat,
                                                 u32 tilingMode, u32 aspectRatio, u32 width,
                                                 u32 height, u32 pitchInPixel) {
+    // 4K override: force output buffer resolution to 3840x2160 so the presenter
+    // VO surface (and the Game Res debug info) reports 4K.
+    width = 3840;
+    height = 2160;
+    pitchInPixel = width;
     LOG_INFO(Lib_VideoOut,
              "pixelFormat = {}, tilingMode = {}, aspectRatio = {}, width = {}, height = {}, "
              "pitchInPixel = {}, guestRet = {:#x}",
