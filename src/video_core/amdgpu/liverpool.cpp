@@ -12,6 +12,7 @@
 #include "core/libraries/kernel/process.h"
 #include "core/libraries/videoout/driver.h"
 #include "core/memory.h"
+#include "common/logging/log.h"
 #include "core/platform.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "video_core/amdgpu/pm4_cmds.h"
@@ -345,6 +346,14 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                         ASSERT_MSG(payload[nop_offset] == 0xc0001000,
                                    "NOP hint is missing in CB setup sequence");
                         last_cb_extent[col_buf_id].raw = payload[nop_offset + 1];
+                        // TODO(4k): temporary diagnostic for render-target sizing
+                        const uintptr_t hint_host_addr =
+                            reinterpret_cast<uintptr_t>(&payload[nop_offset + 1]);
+                        LOG_INFO(Lib_GnmDriver,
+                                 "[4k-diag] CB{} hint: extent={}x{} raw={:#x} payload-addr={:#x}",
+                                 col_buf_id, last_cb_extent[col_buf_id].width,
+                                 last_cb_extent[col_buf_id].height, last_cb_extent[col_buf_id].raw,
+                                 hint_host_addr);
                     } else {
                         last_cb_extent[col_buf_id].raw = 0;
                     }
