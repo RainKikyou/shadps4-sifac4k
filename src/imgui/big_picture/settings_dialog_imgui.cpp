@@ -58,6 +58,8 @@ void SettingsWindow::LoadSettings(std::string profile) {
     fsrEnabledSetting = EmulatorSettings.IsFsrEnabled();
     rcasEnabledSetting = EmulatorSettings.IsRcasEnabled();
     rcasAttenuationSetting = static_cast<float>(EmulatorSettings.GetRcasAttenuation() * 0.001f);
+    force4KResolutionSetting = EmulatorSettings.IsForce4KResolutionEnabled();
+    forceFsrEnabledSetting = EmulatorSettings.IsForceFsrEnabled();
 
     /////////// Input Tab
     motionControlsSetting = EmulatorSettings.IsMotionControlsEnabled();
@@ -120,6 +122,8 @@ void SettingsWindow::SaveSettings(std::string profile) {
     EmulatorSettings.SetWindowWidth(windowWidthSetting, isSpecific);
     EmulatorSettings.SetHdrAllowed(hdrAllowedSetting, isSpecific);
     EmulatorSettings.SetFsrEnabled(fsrEnabledSetting, isSpecific);
+    EmulatorSettings.SetForce4KResolutionEnabled(force4KResolutionSetting, isSpecific);
+    EmulatorSettings.SetForceFsrEnabled(forceFsrEnabledSetting, isSpecific);
     EmulatorSettings.SetRcasEnabled(rcasEnabledSetting, isSpecific);
     EmulatorSettings.SetRcasAttenuation(static_cast<int>(rcasAttenuationSetting * 1000),
                                         isSpecific);
@@ -694,8 +698,10 @@ void SettingsWindow::DrawSettingsTable(SettingsCategory category) {
             AddSettingSliderInt("Window Height", windowHeightSetting, 0, 7000);
             AddSettingCheckbox("Enable HDR", hdrAllowedSetting);
             AddSettingCheckbox("Enable FSR", fsrEnabledSetting);
+            AddSettingCheckbox("Force Enable FSR", forceFsrEnabledSetting);
+            AddSettingCheckbox("Force 4K Game Res", force4KResolutionSetting);
 
-            if (fsrEnabledSetting) {
+            if (fsrEnabledSetting || forceFsrEnabledSetting) {
                 AddSettingCheckbox("Enable RCAS", rcasEnabledSetting);
             }
 

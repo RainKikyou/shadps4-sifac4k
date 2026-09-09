@@ -13,6 +13,7 @@ class FsrPass {
 public:
     struct Settings {
         bool enable{true};
+        bool force{false};
         bool use_rcas{true};
         float rcas_attenuation{0.25f};
     };

@@ -490,9 +490,10 @@ Presenter::Presenter(Frontend::WindowSDL& window_, AmdGpu::Liverpool* liverpool_
         free_queue.push(&frame);
     }
 
-    // 4K override (CUSA15006): force-enable FSR regardless of the resolution
-    // state / user setting so upscaling always runs.
-    fsr_settings.enable = true;
+    // 4K toggle (CUSA15006): "Force 4K Game Res" reports 3840x2160 and
+    // "Force Enable FSR" runs FSR regardless of resolution state.
+    fsr_settings.enable = EmulatorSettings.IsFsrEnabled();
+    fsr_settings.force = EmulatorSettings.IsForceFsrEnabled();
     fsr_settings.use_rcas = EmulatorSettings.IsRcasEnabled();
     fsr_settings.rcas_attenuation =
         static_cast<float>(EmulatorSettings.GetRcasAttenuation() / 1000.f);
@@ -751,10 +752,12 @@ Frame* Presenter::PrepareFrame(const Libraries::VideoOut::BufferAttributeGroup& 
         attribute.attrib.pixel_format == Libraries::VideoOut::PixelFormat::A2R10G10B10Srgb;
     pp_pass.Render(cmdbuf, image_view, image_size, *frame, pp_settings);
 
-    // 4K override (CUSA15006): report the guest output buffer as 3840x2160 while
-    // reading it at its real layout, so the "Game Res" debug info shows 4K
-    // without the pitch/garbage artifacts of forcing the attribute itself.
-    DebugState.game_resolution = {3840u, 2160u};
+    // 4K toggle (CUSA15006): report the guest output buffer as 3840x2160 only
+    // when "Force 4K Game Res" is enabled; the buffer is still read at its real
+    // layout so forcing the attribute is not needed (and would corrupt the image).
+    DebugState.game_resolution = EmulatorSettings.IsForce4KResolutionEnabled()
+                                     ? std::pair<u32, u32>{3840u, 2160u}
+                                     : std::pair<u32, u32>{image_size.width, image_size.height};
     DebugState.output_resolution = {frame->width, frame->height};
 
     std::shared_ptr<std::vector<ScreenshotReadback>> deferred_screenshots{};

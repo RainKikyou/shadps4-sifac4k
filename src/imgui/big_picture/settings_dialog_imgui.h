@@ -139,6 +139,8 @@ private:
     bool fsrEnabledSetting;
     bool rcasEnabledSetting;
     float rcasAttenuationSetting;
+    bool force4KResolutionSetting;
+    bool forceFsrEnabledSetting;
 
     // Input tab
     bool motionControlsSetting;

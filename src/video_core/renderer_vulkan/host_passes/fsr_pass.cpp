@@ -139,9 +139,16 @@ void FsrPass::Create(vk::Device device, VmaAllocator allocator, u32 num_images) 
 vk::ImageView FsrPass::Render(vk::CommandBuffer cmdbuf, vk::ImageView input,
                               vk::Extent2D input_size, vk::Extent2D output_size, Settings settings,
                               bool hdr) {
-    // 4K override (CUSA15006): run FSR unconditionally, without depending on
-    // the enable flag or on the input/output size relationship.
-    (void)settings;
+    if (!settings.enable && !settings.force) {
+        DebugState.is_using_fsr = false;
+        return input;
+    }
+    if (!settings.force && (input_size.width >= output_size.width &&
+                            input_size.height >= output_size.height)) {
+        DebugState.is_using_fsr = false;
+        return input;
+    }
+
     DebugState.is_using_fsr = true;
 
     if (output_size != cur_size) {
