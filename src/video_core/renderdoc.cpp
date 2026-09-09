@@ -92,7 +92,8 @@ void LoadRenderDoc() {
         // Note: keys==nullptr disables capture keys, so explicitly restore the
         // default F12/PrtScrn capture buttons.
         constexpr std::array<RENDERDOC_InputButton, 2> capture_keys{
-            eRENDERDOC_Key_F12, eRENDERDOC_Key_PrtScrn,
+            eRENDERDOC_Key_F12,
+            eRENDERDOC_Key_PrtScrn,
         };
         rdoc_api->SetCaptureKeys(const_cast<RENDERDOC_InputButton*>(capture_keys.data()),
                                  static_cast<int>(capture_keys.size()));
