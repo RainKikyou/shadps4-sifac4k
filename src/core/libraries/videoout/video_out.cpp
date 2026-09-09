@@ -24,9 +24,9 @@ void PS4_SYSV_ABI sceVideoOutSetBufferAttribute(BufferAttribute* attribute, Pixe
                                                 u32 height, u32 pitchInPixel) {
     LOG_INFO(Lib_VideoOut,
              "pixelFormat = {}, tilingMode = {}, aspectRatio = {}, width = {}, height = {}, "
-             "pitchInPixel = {}",
+             "pitchInPixel = {}, guestRet = {:#x}",
              GetPixelFormatString(pixelFormat), tilingMode, aspectRatio, width, height,
-             pitchInPixel);
+             pitchInPixel, reinterpret_cast<uintptr_t>(__builtin_return_address(0)));
 
     std::memset(attribute, 0, sizeof(BufferAttribute));
     attribute->pixel_format = static_cast<PixelFormat>(pixelFormat);
