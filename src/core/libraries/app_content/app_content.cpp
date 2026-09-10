@@ -441,6 +441,10 @@ int PS4_SYSV_ABI sceAppContentGetAddcontInfoList(u32 service_label,
         strncpy(list[written].entitlement_label.data, addcont_info[i].entitlement_label,
                 ORBIS_NP_UNIFIED_ENTITLEMENT_LABEL_SIZE);
         list[written].status = addcont_info[i].status;
+        LOG_INFO(Lib_AppContent,
+                 "GetAddcontInfoList: [{}] label='{}' status={} (service_label={}, list_num={})",
+                 written, addcont_info[i].entitlement_label,
+                 static_cast<u32>(addcont_info[i].status), service_label, list_num);
         written++;
     }
 
@@ -473,6 +477,12 @@ int PS4_SYSV_ABI sceAppContentGetEntitlementKey(
         }
 
         memcpy(key->data, addcont_info[i].key.data, ORBIS_APP_CONTENT_ENTITLEMENT_KEY_SIZE);
+        std::string key_hex;
+        for (u8 byte : addcont_info[i].key.data) {
+            key_hex += fmt::format("{:02X} ", byte);
+        }
+        LOG_INFO(Lib_AppContent, "GetEntitlementKey: label='{}' -> key={} (service_label={})",
+                 addcont_info[i].entitlement_label, key_hex, service_label);
         return ORBIS_OK;
     }
 
