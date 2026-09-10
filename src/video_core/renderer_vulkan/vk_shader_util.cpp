@@ -11,6 +11,11 @@
 
 namespace Vulkan {
 
+std::recursive_mutex& PipelineCompileMutex() {
+    static std::recursive_mutex mutex;
+    return mutex;
+}
+
 namespace {
 constexpr TBuiltInResource DefaultTBuiltInResource = {
     .maxLights = 32,
@@ -161,6 +166,9 @@ bool InitializeCompiler() {
 
 vk::ShaderModule Compile(std::string_view code, vk::ShaderStageFlagBits stage, vk::Device device,
                          std::vector<std::string> defines) {
+    // Serialize driver-level shader compilation; see PipelineCompileMutex().
+    std::scoped_lock compile_lock{PipelineCompileMutex()};
+
     if (!InitializeCompiler()) {
         return {};
     }
@@ -255,6 +263,9 @@ vk::ShaderModule Compile(std::string_view code, vk::ShaderStageFlagBits stage, v
 }
 
 vk::ShaderModule CompileSPV(std::span<const u32> code, vk::Device device) {
+    // Serialize driver-level shader module creation; see PipelineCompileMutex().
+    std::scoped_lock compile_lock{PipelineCompileMutex()};
+
     const vk::ShaderModuleCreateInfo shader_info = {
         .codeSize = code.size() * sizeof(u32),
         .pCode = code.data(),

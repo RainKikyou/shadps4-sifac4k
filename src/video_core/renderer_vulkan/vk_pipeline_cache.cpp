@@ -324,8 +324,14 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline() {
     if (!RefreshGraphicsKey()) {
         return nullptr;
     }
-    const auto [it, is_new] = graphics_pipelines.try_emplace(graphics_key);
+    auto [it, is_new] = graphics_pipelines.try_emplace(graphics_key);
     if (is_new) {
+        // Serialize driver-side pipeline compilation: some NVIDIA drivers crash
+        // when multiple threads create pipelines concurrently.
+        std::scoped_lock compile_lock{Vulkan::PipelineCompileMutex()};
+        if (it->second) { // Another thread compiled it while we waited for the lock.
+            return it->second.get();
+        }
         const auto pipeline_hash = std::hash<GraphicsPipelineKey>{}(graphics_key);
         LOG_INFO(Render_Vulkan, "Compiling graphics pipeline {:#x}", pipeline_hash);
 
@@ -354,8 +360,14 @@ const ComputePipeline* PipelineCache::GetComputePipeline() {
     if (!RefreshComputeKey()) {
         return nullptr;
     }
-    const auto [it, is_new] = compute_pipelines.try_emplace(compute_key);
+    auto [it, is_new] = compute_pipelines.try_emplace(compute_key);
     if (is_new) {
+        // Serialize driver-side pipeline compilation: some NVIDIA drivers crash
+        // when multiple threads create pipelines concurrently.
+        std::scoped_lock compile_lock{Vulkan::PipelineCompileMutex()};
+        if (it->second) { // Another thread compiled it while we waited for the lock.
+            return it->second.get();
+        }
         const auto pipeline_hash = std::hash<ComputePipelineKey>{}(compute_key);
         LOG_INFO(Render_Vulkan, "Compiling compute pipeline {:#x}", pipeline_hash);
 

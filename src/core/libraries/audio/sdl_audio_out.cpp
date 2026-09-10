@@ -493,8 +493,10 @@ private:
             LOG_WARNING(Lib_AudioOut, "Failed to get SDL buffer size: {}", SDL_GetError());
         }
 
-        const u32 sdl_buffer_size = sdl_buffer_frames * sizeof(float) * num_channels;
-        queue_threshold = std::max(guest_buffer_size, sdl_buffer_size) * QUEUE_MULTIPLIER;
+        const u32 stream_channels = ps4_downmix ? 2 : num_channels;
+        const u32 sdl_buffer_size = sdl_buffer_frames * sizeof(float) * stream_channels;
+        const u32 stream_buffer_size = buffer_frames * sizeof(float) * stream_channels;
+        queue_threshold = std::max(stream_buffer_size, sdl_buffer_size) * QUEUE_MULTIPLIER;
 
         LOG_DEBUG(Lib_AudioOut, "Audio queue threshold: {} bytes (SDL buffer: {} frames)",
                   queue_threshold, sdl_buffer_frames);

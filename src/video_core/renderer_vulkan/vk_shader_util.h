@@ -3,12 +3,23 @@
 
 #pragma once
 
+#include <mutex>
 #include <span>
 
 #include "common/types.h"
 #include "video_core/renderer_vulkan/vk_common.h"
 
 namespace Vulkan {
+
+/**
+ * @brief Global mutex serializing driver-side shader compilation.
+ *
+ * Some NVIDIA drivers crash when shader/pipeline creation is invoked
+ * concurrently from multiple threads (e.g. GpuCommandProcessor, texture
+ * cache detilers and graphics/compute pipeline compiles racing). All
+ * driver-level compilation entry points must hold this recursive mutex.
+ */
+std::recursive_mutex& PipelineCompileMutex();
 
 /**
  * @brief Creates a vulkan shader module from GLSL by converting it to SPIR-V using glslang.

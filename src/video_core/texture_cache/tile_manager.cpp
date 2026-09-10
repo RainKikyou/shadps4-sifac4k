@@ -106,6 +106,14 @@ vk::Pipeline TileManager::GetTilingPipeline(const ImageInfo& info, bool is_tiler
         return pipeline;
     }
 
+    // NVIDIA drivers can crash when compute pipeline creation (this detiler/tiler
+    // compilation) races with other threads compiling shaders/pipelines.
+    std::scoped_lock compile_lock{Vulkan::PipelineCompileMutex()};
+    // Re-check now that we hold the lock: another thread may have compiled it.
+    if (auto pipeline = *tiling_pipelines[pl_id]; pipeline != VK_NULL_HANDLE) {
+        return pipeline;
+    }
+
     const auto device = instance.GetDevice();
     const auto micro_tile_mode = AmdGpu::GetMicroTileMode(info.tile_mode);
     std::vector<std::string> defines = {
